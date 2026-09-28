@@ -44,10 +44,10 @@ goto :after_deps
 :deps_ok
 echo.
 echo [1/3] node_modules exists, skip install.
+goto :after_deps
 :deps_skip
 echo.
 echo [1/3] Skip build mode - skip npm install.
-goto :after_deps
 :after_deps
 
 if "%SKIP_BUILD%"=="1" goto :after_build
@@ -73,7 +73,7 @@ mkdir "%RELEASE_DIR%"
 
 set "COPIED=0"
 
-rem 1) NSIS installer -> Weasel-Skin-Studio-{ver}-setup.exe
+rem 1) Tauri NSIS installer -> Weasel-Skin-Studio-{ver}-setup.exe
 set "NSIS_SRC="
 if exist "%BUNDLE_DIR%\nsis\*.exe" (
     for %%f in ("%BUNDLE_DIR%\nsis\*.exe") do set "NSIS_SRC=%%f"
@@ -86,7 +86,7 @@ if not errorlevel 1 (
 )
 :after_nsis
 
-rem 2) Portable exe -> Weasel-Skin-Studio-{ver}-portable.exe
+rem 2) Portable / app exe -> Weasel-Skin-Studio-{ver}-portable.exe
 if not exist "%EXE_DIR%\%APP_NAME%.exe" goto :after_portable
 copy /y "%EXE_DIR%\%APP_NAME%.exe" "%RELEASE_DIR%\%OUT_PORTABLE%" >nul
 if not errorlevel 1 (
