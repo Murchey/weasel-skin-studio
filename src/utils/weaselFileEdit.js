@@ -1,0 +1,218 @@
+import { formatWeaselColor } from './color.js'
+import { COLOR_FIELDS } from './weaselYaml.js'
+
+/**
+ * 在尽量保留原文件注释/结构的前提下，对 weasel.yaml 做外科式修改：
+ * - 追加配色方案到 preset_color_schemes
+ * - 替换已有配色方案块
+ * - 更新 style 段中的 color_scheme 等键
+ */
+
+function indentOf(line) {
+  const m = line.match(/^(\s*)/)
+  return m ? m[1] : ''
+}
+
+/** 找到顶层键的起止行（含键行，不含下一个同级键） */
+export function findTopLevelKeyRange(lines, key) {
+  const keyRe = new RegExp(`^${key}\\s*:`)
+  let start = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (keyRe.test(lines[i])) {
+      start = i
+      break
+    }
+  }
+  if (start < 0) return null
+
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    const ind = indentOf(line)
+    if (ind === '' && /^[A-Za-z_][\w-]*\s*:/.test(line)) {
+      end = i
+      break
+    }
+  }
+  return { start, end }
+}
+
+/** 在 preset_color_schemes 下定位某个 scheme 块 */
+export function findSchemeRange(lines, schemeId) {
+  const preset = findTopLevelKeyRange(lines, 'preset_color_schemes')
+  if (!preset) return null
+
+  const schemeRe = new RegExp(`^(\\s+)${escapeReg(schemeId)}\\s*:`)
+  let start = -1
+  let indent = '  '
+  for (let i = preset.start + 1; i < preset.end; i++) {
+    const m = lines[i].match(schemeRe)
+    if (m) {
+      start = i
+      indent = m[1]
+      break
+    }
+  }
+  if (start < 0) return null
+
+  let end = preset.end
+  for (let i = start + 1; i < preset.end; i++) {
+    const line = lines[i]
+    if (!line.trim()) continue
+    // 同级 scheme 或注释行后遇到更浅缩进
+    const ind = indentOf(line)
+    if (ind.length < indent.length) {
+      end = i
+      break
+    }
+    if (ind.length === indent.length && /^[A-Za-z_][\w-]*\s*:/.test(line.trim()) && !line.trim().startsWith('#')) {
+      // 同级新键（下一个 scheme）
+      end = i
+      break
+    }
+  }
+  return { start, end, indent }
+}
+
+function escapeReg(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** 生成 scheme 的 YAML 行（不含外层缩进，indent 为方案 id 行缩进） */
+export function schemeToYamlLines(scheme, indent = '  ') {
+  const format = scheme.color_format || 'abgr'
+  const inner = indent + '  '
+  const lines = []
+  lines.push(`${indent}${scheme.id}:`)
+  lines.push(`${inner}name: "${String(scheme.name || scheme.id).replace(/"/g, '\\"')}"`)
+  if (scheme.author) lines.push(`${inner}author: ${scheme.author}`)
+  lines.push(`${inner}color_format: ${format}`)
+  for (const field of COLOR_FIELDS) {
+    const rgba = scheme.colors?.[field.key]
+    if (!rgba) continue
+    const val = formatWeaselColor(rgba, format)
+    lines.push(`${inner}${field.key}: ${val}`)
+  }
+  return lines
+}
+
+/**
+ * 追加配色方案；若 id 已存在则替换该块
+ * @returns {{ text: string, action: 'appended'|'replaced'|'created-section' }}
+ */
+export function upsertSchemeInWeaselText(originalText, scheme) {
+  const lines = originalText.split(/\r?\n/)
+  const existing = findSchemeRange(lines, scheme.id)
+
+  if (existing) {
+    const block = schemeToYamlLines(scheme, existing.indent)
+    const next = [...lines.slice(0, existing.start), ...block, ...lines.slice(existing.end)]
+    return { text: next.join('\n'), action: 'replaced' }
+  }
+
+  // 追加到 preset_color_schemes 末尾
+  let preset = findTopLevelKeyRange(lines, 'preset_color_schemes')
+  if (!preset) {
+    // 文件没有该段，则追加
+    const add = ['', 'preset_color_schemes:', ...schemeToYamlLines(scheme, '  '), '']
+    return { text: originalText + (originalText.endsWith('\n') ? '' : '\n') + add.join('\n'), action: 'created-section' }
+  }
+
+  // 找到段内最后一个非空行，在其后插入
+  let insertAt = preset.end
+  while (insertAt > preset.start + 1 && !lines[insertAt - 1].trim()) {
+    insertAt--
+  }
+  // 保留段末原缩进风格
+  const indent = '  '
+  const block = ['', ...schemeToYamlLines(scheme, indent)]
+  const next = [...lines.slice(0, insertAt), ...block, ...lines.slice(insertAt)]
+  return { text: next.join('\n'), action: 'appended' }
+}
+
+/** 删除 scheme 块 */
+export function removeSchemeFromWeaselText(originalText, schemeId) {
+  const lines = originalText.split(/\r?\n/)
+  const range = findSchemeRange(lines, schemeId)
+  if (!range) return { text: originalText, action: 'missing' }
+  const next = [...lines.slice(0, range.start), ...lines.slice(range.end)]
+  return { text: next.join('\n'), action: 'removed' }
+}
+
+/** 更新 style 段中的若干键（不重写整个 style，尽量保注释） */
+export function updateStyleKeysInWeaselText(originalText, patch) {
+  const lines = originalText.split(/\r?\n/)
+  const styleRange = findTopLevelKeyRange(lines, 'style')
+  if (!styleRange) {
+    const block = ['style:']
+    for (const [k, v] of Object.entries(patch)) {
+      block.push(`  ${k}: ${formatYamlScalar(v)}`)
+    }
+    block.push('')
+    return { text: originalText + (originalText.endsWith('\n') ? '' : '\n') + block.join('\n'), action: 'created-style' }
+  }
+
+  const before = lines.slice(0, styleRange.start + 1)
+  const body = lines.slice(styleRange.start + 1, styleRange.end)
+  const after = lines.slice(styleRange.end)
+
+  const patchKeys = new Set(Object.keys(patch))
+  const rewritten = []
+  const seen = new Set()
+
+  for (const line of body) {
+    const m = line.match(/^(\s+)([A-Za-z_][\w-]*)\s*:/)
+    if (m && patchKeys.has(m[2])) {
+      seen.add(m[2])
+      const comment = extractTrailingComment(line)
+      rewritten.push(`${m[1]}${m[2]}: ${formatYamlScalar(patch[m[2]])}${comment ? '  ' + comment : ''}`)
+    } else {
+      rewritten.push(line)
+    }
+  }
+
+  for (const [k, v] of Object.entries(patch)) {
+    if (!seen.has(k)) {
+      rewritten.push(`  ${k}: ${formatYamlScalar(v)}`)
+    }
+  }
+
+  return {
+    text: [...before, ...rewritten, ...after].join('\n'),
+    action: 'updated-style',
+  }
+}
+
+function extractTrailingComment(line) {
+  // 粗略提取行尾注释（避免截断引号内 #）
+  let inSingle = false
+  let inDouble = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === "'" && !inDouble) inSingle = !inSingle
+    else if (ch === '"' && !inSingle) inDouble = !inDouble
+    else if (ch === '#' && !inSingle && !inDouble) {
+      // 前面要有空白或行首
+      if (i === 0 || /\s/.test(line[i - 1])) {
+        return line.slice(i)
+      }
+    }
+  }
+  return ''
+}
+
+function formatYamlScalar(v) {
+  if (typeof v === 'boolean') return v ? 'true' : 'false'
+  if (typeof v === 'number') return String(v)
+  if (v == null) return '""'
+  const s = String(v)
+  if (s === '') return '""'
+  if (/^[\w.%/-]+$/.test(s) && !/^(true|false|null|yes|no|on|off)$/i.test(s)) return s
+  return JSON.stringify(s)
+}
+
+/** 设置 style.color_scheme 为当前方案 id */
+export function setActiveColorSchemeInText(text, schemeId) {
+  return updateStyleKeysInWeaselText(text, { color_scheme: schemeId })
+}

@@ -1,0 +1,27 @@
+[package]
+name = "weasel-skin-studio"
+version = "1.0.0"
+description = "Weasel Skin Studio - 小狼毫可视化皮肤工坊"
+authors = ["Weasel Skin Studio"]
+edition = "2021"
+
+[lib]
+name = "weasel_skin_studio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

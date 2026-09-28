@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Weasel Skin Studio · flat palette · black + yellow -->
+  <defs>
+    <clipPath id="iconClip">
+      <rect width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#121212"/>
+
+  <g clip-path="url(#iconClip)">
+    <!-- palette body -->
+    <path
+      d="M256 88
+         c92-6 172 42 198 116
+         c22 64 2 140-52 180
+         c-46 34-112 38-162 14
+         c-24-12-48-12-72-2
+         c-46 20-102 2-128-44
+         c-30-52-18-124 30-168
+         C108 124 172 94 256 88Z"
+      fill="#FFC800"/>
+
+    <!-- thumb hole: clear cutout, lower-left -->
+    <ellipse cx="176" cy="300" rx="52" ry="44" fill="#121212"/>
+    <!-- subtle rim to read as a hole -->
+    <ellipse cx="176" cy="300" rx="52" ry="44" fill="none" stroke="#E6B400" stroke-width="6"/>
+
+    <!-- paint wells along top-right -->
+    <circle cx="252" cy="164" r="32" fill="#121212"/>
+    <circle cx="332" cy="172" r="32" fill="#FFFFFF"/>
+    <circle cx="386" cy="236" r="32" fill="#E09800"/>
+    <circle cx="372" cy="318" r="32" fill="#FFF6D6"/>
+    <circle cx="292" cy="360" r="32" fill="#2C2C2C"/>
+  </g>
+
+  <!-- outer keyline -->
+  <rect x="2" y="2" width="508" height="508" rx="110" ry="110" fill="none" stroke="#0A0A0A" stroke-width="4"/>
+</svg>
