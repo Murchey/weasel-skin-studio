@@ -142,17 +142,17 @@ body {
   background: linear-gradient(145deg, var(--app-stage-grad-a), var(--app-stage-grad-b));
 }
 
-/* preview candidate: match Weasel — selected highlight has NO inner padding */
+/* preview candidate: match Weasel — selected hilite has margin 0 */
 .cand-row {
   display: flex;
   align-items: center;
   /* hilite_spacing = gap between mark / label / text / comment */
   gap: var(--hilite-spacing, 6px);
-  /* no internal padding inside the hilited block */
-  padding: 0;
-  /* hilite_padding = outside spacing of the highlight, not inner pad */
-  margin: 0 calc(var(--hilite-padding, 8px) / 2);
-  border-radius: var(--hilite-radius, 4px);
+  /* outer margin must be 0 like Weasel */
+  margin: 0;
+  /* hilite_padding = inner padding of the highlight box */
+  padding: 0 var(--hilite-padding, 0px);
+  border-radius: var(--hilite-radius, 0px);
   box-sizing: border-box;
 }
 

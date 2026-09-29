@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Input, Tooltip, Slider, Button } from '@heroui/react'
 import { toCss, parseHexToRgba, rgbaToHex } from '../utils/color.js'
 import { useSkin } from '../store/skinStore.jsx'
@@ -7,12 +7,28 @@ export default function ColorField({ fieldKey, label, optional = false }) {
   const { getColor, setColor, weaselColor } = useSkin()
   const value = getColor(fieldKey)
 
-  const hex = useMemo(() => (value ? rgbaToHex(value, true) : '#00000000'), [value])
+  const hexFromStore = useMemo(() => (value ? rgbaToHex(value, true) : '#00000000'), [value])
+  const [hexDraft, setHexDraft] = useState(hexFromStore)
+
+  // sync draft when store value changes externally
+  useEffect(() => {
+    setHexDraft(hexFromStore)
+  }, [hexFromStore])
+
   const css = value ? toCss(value) : 'transparent'
   const weaselVal = weaselColor(fieldKey)
 
-  function onHexChange(v) {
-    setColor(fieldKey, parseHexToRgba(v))
+  function commitHex(raw) {
+    const s = String(raw || '').trim()
+    const withHash = s.startsWith('#') ? s : `#${s}`
+    if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(withHash)) {
+      setHexDraft(hexFromStore)
+      return
+    }
+    const prev = value
+    const next = parseHexToRgba(withHash)
+    setColor(fieldKey, { ...next, a: prev?.a ?? next.a ?? 255 })
+    setHexDraft(rgbaToHex({ ...next, a: prev?.a ?? next.a ?? 255 }, true))
   }
 
   function onColorInput(e) {
@@ -31,15 +47,15 @@ export default function ColorField({ fieldKey, label, optional = false }) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-zinc-200/80 py-2 last:border-b-0">
-        <div className="w-28 shrink-0">
-          <div className="text-xs font-medium">{label}</div>
-          <div className="mono text-[10px] app-muted">{weaselVal}</div>
-        </div>
+    <div className="flex items-center gap-2 border-b border-(--app-border) py-2 last:border-b-0">
+      <div className="w-28 shrink-0">
+        <div className="text-xs font-medium">{label}</div>
+        <div className="mono text-[10px] app-muted">{weaselVal}</div>
+      </div>
 
-        <div className="flex flex-1 items-center gap-2">
-          <label
-            className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-(--app-border)"
+      <div className="flex flex-1 items-center gap-2">
+        <label
+          className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-(--app-border)"
           style={{
             background: value
               ? css
@@ -50,7 +66,7 @@ export default function ColorField({ fieldKey, label, optional = false }) {
           <input
             type="color"
             className="absolute inset-0 cursor-pointer opacity-0"
-            value={hex.slice(0, 7)}
+            value={hexFromStore.slice(0, 7)}
             onChange={onColorInput}
           />
         </label>
@@ -58,8 +74,12 @@ export default function ColorField({ fieldKey, label, optional = false }) {
         <Input
           className="w-28"
           size="sm"
-          value={hex}
-          onChange={(e) => onHexChange(e.target.value)}
+          value={hexDraft}
+          onChange={(e) => setHexDraft(e.target.value)}
+          onBlur={() => commitHex(hexDraft)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitHex(hexDraft)
+          }}
           aria-label={`${label} 十六进制`}
         />
 
@@ -74,8 +94,7 @@ export default function ColorField({ fieldKey, label, optional = false }) {
                 maxValue={255}
                 step={1}
                 value={[value.a ?? 255]}
-                onChange={(v) => onAlpha(v)}
-                size="sm"
+                onChange={(v) => onAlpha(Array.isArray(v) ? v[0] : v)}
               >
                 <Slider.Track>
                   <Slider.Fill />

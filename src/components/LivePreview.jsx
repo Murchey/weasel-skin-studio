@@ -9,8 +9,8 @@ function ptToPx(pt, fallback = 14) {
 
 /**
  * Live preview aligned with Weasel:
- * - selected highlight has NO inner padding (text hugs the hilite box)
- * - hilite_padding is outer spacing around the highlight
+ * - candidate / selected hilite outer margin is 0
+ * - hilite_padding is inner padding of the highlight box
  * - hilite_spacing is the gap between mark/label/text/comment
  * - candidate_spacing is the gap between candidate items
  */
@@ -119,8 +119,8 @@ export default function LivePreview() {
     const selected = index === state.selectedCandidate
     return {
       '--hilite-spacing': `${L.hilite_spacing ?? 6}px`,
-      '--hilite-padding': `${L.hilite_padding ?? 8}px`,
-      '--hilite-radius': `${selected ? L.round_corner || 4 : 0}px`,
+      '--hilite-padding': `${L.hilite_padding ?? 0}px`,
+      '--hilite-radius': `${L.round_corner || 0}px`,
       '--hilite-bg': selected
         ? css('hilited_candidate_back_color', 'rgba(245, 158, 11, 0.28)')
         : 'transparent',

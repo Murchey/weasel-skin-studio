@@ -4,7 +4,6 @@ import {
   Dropdown,
   Input,
   Modal,
-  NumberField,
   RadioGroup,
   Switch,
   Tabs,
@@ -190,9 +189,9 @@ function StudioBody() {
 
   return (
     <div className="app-shell flex h-full min-h-0 flex-col">
-      <header className="app-panel flex items-center gap-3 border-b px-4 py-2.5">
+      <header className="app-panel flex h-12 shrink-0 items-center gap-3 border-b px-3">
         <div className="flex items-center gap-2.5">
-          <div className="brand-mark flex h-9 w-9 items-center justify-center rounded-xl font-bold">
+          <div className="brand-mark flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold">
             W
           </div>
           <div>
@@ -214,19 +213,16 @@ function StudioBody() {
             保存
           </Button>
           <Dropdown>
-            <Dropdown.Trigger>
-              <Button size="sm" variant="flat">
-                导出
-              </Button>
+            <Dropdown.Trigger size="sm" variant="flat">
+              导出
             </Dropdown.Trigger>
-            <Dropdown.Menu
-              onAction={(key) => onExport(key)}
-              aria-label="导出"
-            >
-              <Dropdown.Item id="copy">下载 weasel.yaml 副本</Dropdown.Item>
-              <Dropdown.Item id="skin">导出皮肤 YAML 片段</Dropdown.Item>
-              <Dropdown.Item id="active">复制当前方案 YAML</Dropdown.Item>
-            </Dropdown.Menu>
+            <Dropdown.Popover>
+              <Dropdown.Menu onAction={(key) => onExport(key)} aria-label="导出">
+                <Dropdown.Item id="copy">下载 weasel.yaml 副本</Dropdown.Item>
+                <Dropdown.Item id="skin">导出皮肤 YAML 片段</Dropdown.Item>
+                <Dropdown.Item id="active">复制当前方案 YAML</Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
           </Dropdown>
         </div>
       </header>
@@ -340,9 +336,15 @@ function StudioBody() {
               size="sm"
               aria-label="预览背景"
             >
-              <Radio value="light">浅色</Radio>
-              <Radio value="dark">深色</Radio>
-              <Radio value="desktop">桌面</Radio>
+              <Radio value="light">
+                      <Radio.Content>浅色</Radio.Content>
+                    </Radio>
+              <Radio value="dark">
+                      <Radio.Content>深色</Radio.Content>
+                    </Radio>
+              <Radio value="desktop">
+                      <Radio.Content>桌面</Radio.Content>
+                    </Radio>
             </RadioGroup>
             <span className="text-[11px] app-muted">
               {state.style.inline_preedit ? '行内预编辑' : '独立候选窗'} ·{' '}
@@ -420,9 +422,15 @@ function StudioBody() {
                     size="sm"
                     aria-label="color_format"
                   >
-                    <Radio value="abgr">abgr</Radio>
-                    <Radio value="rgba">rgba</Radio>
-                    <Radio value="argb">argb</Radio>
+                    <Radio value="abgr">
+                      <Radio.Content>abgr</Radio.Content>
+                    </Radio>
+                    <Radio value="rgba">
+                      <Radio.Content>rgba</Radio.Content>
+                    </Radio>
+                    <Radio value="argb">
+                      <Radio.Content>argb</Radio.Content>
+                    </Radio>
                   </RadioGroup>
                 </div>
                 {groupOrder.map((g) => (
@@ -462,9 +470,15 @@ function StudioBody() {
                     size="sm"
                     aria-label="排列"
                   >
-                    <Radio value="h">横排</Radio>
-                    <Radio value="v">竖排</Radio>
-                    <Radio value="vt">竖排文本</Radio>
+                    <Radio value="h">
+                      <Radio.Content>横排</Radio.Content>
+                    </Radio>
+                    <Radio value="v">
+                      <Radio.Content>竖排</Radio.Content>
+                    </Radio>
+                    <Radio value="vt">
+                      <Radio.Content>竖排文本</Radio.Content>
+                    </Radio>
                   </RadioGroup>
                 </FormRow>
                 <FormRow label="行内预编辑">
@@ -472,7 +486,9 @@ function StudioBody() {
                     isSelected={!!state.style.inline_preedit}
                     onChange={(v) => store.setStyle('inline_preedit', v)}
                     size="sm"
-                  />
+                  >
+                    <Switch.Content>{state.style.inline_preedit ? '开启' : '关闭'}</Switch.Content>
+                  </Switch>
                 </FormRow>
                 <RangeRow
                   label="边框"
@@ -549,21 +565,23 @@ function StudioBody() {
                   onChange={(v) => store.setStyle('font_point', v)}
                 />
                 <FormRow label="标签字号">
-                  <NumberField
+                  <Input
+                    type="number"
                     size="sm"
-                    minValue={8}
-                    maxValue={32}
-                    value={state.style.label_font_point}
-                    onChange={(v) => store.setStyle('label_font_point', v)}
+                    min={8}
+                    max={32}
+                    value={String(state.style.label_font_point ?? '')}
+                    onChange={(e) => store.setStyle('label_font_point', Number(e.target.value) || 8)}
                   />
                 </FormRow>
                 <FormRow label="注释字号">
-                  <NumberField
+                  <Input
+                    type="number"
                     size="sm"
-                    minValue={8}
-                    maxValue={32}
-                    value={state.style.comment_font_point}
-                    onChange={(v) => store.setStyle('comment_font_point', v)}
+                    min={8}
+                    max={32}
+                    value={String(state.style.comment_font_point ?? '')}
+                    onChange={(e) => store.setStyle('comment_font_point', Number(e.target.value) || 8)}
                   />
                 </FormRow>
                 <FormRow label="标签格式">
