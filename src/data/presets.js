@@ -2,6 +2,31 @@
 
 export const PRESET_SCHEMES = [
   {
+    id: 'endfield',
+    name: '终末地',
+    author: 'Custom',
+    color_format: 'rgba',
+    colors: {
+      text_color: { r: 0xe8, g: 0xe8, b: 0xe8, a: 255 },
+      back_color: { r: 0x1c, g: 0x1c, b: 0x1c, a: 0xf2 },
+      border_color: { r: 0xc4, g: 0xa0, b: 0x00, a: 255 },
+      label_color: { r: 0xd0, g: 0xd0, b: 0xd0, a: 255 },
+      candidate_text_color: { r: 0xe8, g: 0xe8, b: 0xe8, a: 255 },
+      candidate_back_color: { r: 0x1c, g: 0x1c, b: 0x1c, a: 0 },
+      comment_text_color: { r: 0xa8, g: 0xa8, b: 0xa8, a: 255 },
+      preedit_color: { r: 0xf0, g: 0xf0, b: 0xf0, a: 255 },
+      hilited_text_color: { r: 0xf5, g: 0xf5, b: 0xf5, a: 255 },
+      hilited_back_color: { r: 0x2a, g: 0x2a, b: 0x2a, a: 255 },
+      hilited_label_color: { r: 0xf0, g: 0xf0, b: 0xf0, a: 255 },
+      hilited_comment_text_color: { r: 0xc8, g: 0xa8, b: 0x20, a: 255 },
+      hilited_candidate_text_color: { r: 0x1a, g: 0x1a, b: 0x1a, a: 255 },
+      hilited_candidate_back_color: { r: 0xb8, g: 0x96, b: 0x0c, a: 255 },
+      hilited_candidate_border_color: { r: 0xc4, g: 0xa0, b: 0x00, a: 255 },
+      hilited_candidate_label_color: { r: 0x1a, g: 0x1a, b: 0x1a, a: 255 },
+      hilited_mark_color: { r: 0xff, g: 0xd1, b: 0x00, a: 255 },
+    },
+  },
+  {
     id: 'nord',
     name: '远山／Nord',
     author: 'Mirtle',

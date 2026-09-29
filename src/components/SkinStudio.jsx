@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import {
   Button,
   Dropdown,
@@ -14,6 +14,7 @@ import ColorField from './ColorField.jsx'
 import LivePreview from './LivePreview.jsx'
 import { SkinProvider, useSkin } from '../store/skinStore.jsx'
 import { useThemeMode } from '../hooks/useThemeMode.js'
+import { usePanelWidth, PanelResizer } from '../hooks/usePanelWidth.jsx'
 import { COLOR_FIELDS, COLOR_GROUPS } from '../utils/weaselYaml.js'
 import { PRESET_SCHEMES } from '../data/presets.js'
 import { toCss } from '../utils/color.js'
@@ -78,6 +79,8 @@ function StudioBody() {
   const store = useSkin()
   const { state, activeScheme, colorFormat } = store
   const { theme, toggle } = useThemeMode()
+  const leftPanel = usePanelWidth('wss-panel-left', 'left', 240)
+  const rightPanel = usePanelWidth('wss-panel-right', 'right', 320)
   const [rightTab, setRightTab] = useState('color')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
@@ -124,14 +127,26 @@ function StudioBody() {
 
   async function onSave() {
     try {
-      const result = await store.saveToWeaselFile()
+      const result = await store.saveSchemes()
       setPreviewOpen(false)
+      if (result.exported) {
+        // 已另存/下载，无源文件
+        return
+      }
       if (result.needsDownload) {
         alert('当前文件只读，内存副本已更新。可点「导出」下载 weasel.yaml 后手动覆盖。')
       }
     } catch (e) {
       alert(e?.message || String(e))
     }
+  }
+
+  function onDeleteSelected() {
+    const ids = state.selectedIds || []
+    if (!ids.length) return
+    if (!window.confirm(`删除所选 ${ids.length} 个配色？保存时会从 weasel.yaml 移除对应方案。`)) return
+    store.removeSchemes(ids)
+    store.clearSchemeSelection()
   }
 
   async function onRemoveFromFile() {
@@ -227,14 +242,29 @@ function StudioBody() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_320px]">
-        <aside className="scroll-y app-panel border-r p-3">
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className="scroll-y app-panel shrink-0 border-r p-3"
+          style={{ width: leftPanel.width }}
+        >
           <section className="mb-5">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold">配色</span>
-              <Button size="sm" variant="light" color="primary" onPress={() => store.addScheme()}>
-                + 新建
-              </Button>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold">
+                配色
+                {(state.selectedIds || []).length > 0 && (
+                  <span className="ml-1 app-muted">（已选 {(state.selectedIds || []).length}）</span>
+                )}
+              </span>
+              <div className="flex items-center gap-1">
+                {(state.selectedIds || []).length > 0 && (
+                  <Button size="sm" variant="light" color="danger" onPress={onDeleteSelected}>
+                    删除所选
+                  </Button>
+                )}
+                <Button size="sm" variant="light" color="primary" onPress={() => store.addScheme()}>
+                  + 新建
+                </Button>
+              </div>
             </div>
             <div className="space-y-1.5">
               {state.schemes.map((s) => (
@@ -244,10 +274,19 @@ function StudioBody() {
                     s.id === state.activeSchemeId
                       ? 'border-(--accent) bg-(--accent-soft)'
                       : 'border-(--app-border) hover:border-(--accent)'
-                  }`}
+                  } ${(state.selectedIds || []).includes(s.id) ? 'ring-1 ring-(--accent)' : ''}`}
                   onClick={() => store.selectScheme(s.id)}
                 >
                   <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 shrink-0 cursor-pointer"
+                      style={{ accentColor: 'var(--accent)' }}
+                      checked={(state.selectedIds || []).includes(s.id)}
+                      onChange={() => store.toggleSchemeSelect(s.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`选择 ${s.name || s.id}`}
+                    />
                     <div className="flex gap-1">
                       <span
                         className="h-5 w-5 rounded border border-(--app-border)"
@@ -327,7 +366,9 @@ function StudioBody() {
           </section>
         </aside>
 
-        <main className="flex min-h-0 flex-col">
+        <PanelResizer side="left" onPointerDown={leftPanel.onPointerDown} />
+
+        <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-3 app-panel border-b px-3 py-2">
             <RadioGroup
               orientation="horizontal"
@@ -363,7 +404,12 @@ function StudioBody() {
           </div>
         </main>
 
-        <aside className="scroll-y app-panel border-l">
+        <PanelResizer side="right" onPointerDown={rightPanel.onPointerDown} />
+
+        <aside
+          className="scroll-y app-panel shrink-0 border-l"
+          style={{ width: rightPanel.width }}
+        >
           <section className="border-b border-(--app-border) p-3">
             <div className="mb-2 flex items-center gap-2">
               <span

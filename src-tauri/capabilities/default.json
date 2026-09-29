@@ -12,6 +12,38 @@
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-exists",
+    "shell:allow-execute",
+    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "run-cmd",
+          "cmd": "cmd",
+          "args": true
+        },
+        {
+          "name": "run-powershell",
+          "cmd": "powershell",
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "run-cmd",
+          "cmd": "cmd",
+          "args": true
+        },
+        {
+          "name": "run-powershell",
+          "cmd": "powershell",
+          "args": true
+        }
+      ]
+    },
     {
       "identifier": "fs:scope",
       "allow": [

@@ -50,15 +50,17 @@ function initialState() {
     activeSchemeId: 'custom',
     dirty: false,
     stageMode: 'light',
-    sampleText: 'zhongwen',
+    sampleText: 'xiao lang hao shu ru fa',
     sampleCandidates: [
-      { label: '1', text: '中文', comment: 'zhōng wén' },
-      { label: '2', text: '终文', comment: '' },
-      { label: '3', text: '中文输入法', comment: 'rime' },
-      { label: '4', text: '重文', comment: '' },
-      { label: '5', text: '钟文', comment: '' },
+      { label: '1', text: '小狼毫输入法', comment: '' },
+      { label: '2', text: '小狼毫', comment: '' },
+      { label: '3', text: 'Weasel', comment: '' },
+      { label: '4', text: '小狼', comment: '' },
+      { label: '5', text: '小浪', comment: '' },
     ],
     selectedCandidate: 0,
+    selectedIds: [],
+    pendingRemovals: [],
     studioMode: false,
     file: initialFile(),
   }
@@ -229,15 +231,69 @@ export function SkinProvider({ children }) {
           prev.activeSchemeId === id ? schemes[0].id : prev.activeSchemeId
         const color_scheme =
           prev.activeSchemeId === id ? schemes[0].id : prev.style.color_scheme
+        const selectedIds = prev.selectedIds.filter((x) => x !== id)
+        // 记录待从 weasel.yaml 删除的方案 id
+        const pendingRemovals = prev.pendingRemovals.includes(id)
+          ? prev.pendingRemovals
+          : [...prev.pendingRemovals, id]
         return {
           ...prev,
           schemes,
           activeSchemeId,
+          selectedIds,
+          pendingRemovals,
           style: { ...prev.style, color_scheme },
           dirty: true,
         }
       })
       return ok
+    },
+    [patch],
+  )
+
+  const toggleSchemeSelect = useCallback((id) => {
+    patch((prev) => {
+      const selectedIds = prev.selectedIds.includes(id)
+        ? prev.selectedIds.filter((x) => x !== id)
+        : [...prev.selectedIds, id]
+      return { ...prev, selectedIds }
+    })
+  }, [patch])
+
+  const clearSchemeSelection = useCallback(() => {
+    patch((prev) => ({ ...prev, selectedIds: [] }))
+  }, [patch])
+
+  /** 批量删除（列表 + 记入待从文件删除） */
+  const removeSchemes = useCallback(
+    (ids) => {
+      const list = Array.isArray(ids) ? ids : [ids]
+      patch((prev) => {
+        const idSet = new Set(list)
+        // 至少保留 1 个
+        let schemes = prev.schemes.filter((s) => !idSet.has(s.id))
+        if (schemes.length === 0) return prev
+        const still = new Set(schemes.map((s) => s.id))
+        const activeSchemeId = still.has(prev.activeSchemeId)
+          ? prev.activeSchemeId
+          : schemes[0].id
+        const color_scheme = still.has(prev.style.color_scheme)
+          ? prev.style.color_scheme
+          : activeSchemeId
+        const pendingRemovals = prev.pendingRemovals.slice()
+        for (const id of list) {
+          if (!pendingRemovals.includes(id)) pendingRemovals.push(id)
+        }
+        return {
+          ...prev,
+          schemes,
+          activeSchemeId,
+          selectedIds: prev.selectedIds.filter((x) => !idSet.has(x)),
+          pendingRemovals,
+          style: { ...prev.style, color_scheme },
+          dirty: true,
+        }
+      })
     },
     [patch],
   )
@@ -356,6 +412,9 @@ export function SkinProvider({ children }) {
     }
     const s = activeScheme
     let text = upsertSchemeInWeaselText(state.file.text, s).text
+    for (const rid of state.pendingRemovals) {
+      text = removeSchemeFromWeaselText(text, rid).text
+    }
     text = updateStyleKeysInWeaselText(text, {
       color_scheme: s.id,
       font_point: state.style.font_point,
@@ -428,6 +487,7 @@ export function SkinProvider({ children }) {
           lastAction: `已保存「${s.id}」`,
         },
         dirty: false,
+        pendingRemovals: [],
       }))
       return { ok: true, written: true, needsDownload: false, schemeId: s.id }
     }
@@ -502,6 +562,33 @@ export function SkinProvider({ children }) {
     }))
   }, [exportAll])
 
+  /**
+   * 保存入口：
+   * - 已打开 weasel.yaml 且可写 → 写回源文件（含删除 pendingRemovals）
+   * - 否则 → 另存/下载当前方案 YAML
+   */
+  const saveSchemes = useCallback(async () => {
+    if (state.file.loaded && state.file.text && canWriteFile()) {
+      return saveToWeaselFile()
+    }
+    const ok = await downloadWeaselFile('weasel-skin.yaml', exportAll())
+    setState((prev) => ({
+      ...prev,
+      file: {
+        ...prev.file,
+        lastAction: ok ? '已另存 weasel-skin.yaml' : '已取消另存',
+      },
+      pendingRemovals: [],
+    }))
+    return {
+      ok: !!ok,
+      written: !!ok,
+      needsDownload: false,
+      exported: true,
+      schemeId: activeScheme?.id,
+    }
+  }, [state.file, canWriteFile, saveToWeaselFile, exportAll, activeScheme])
+
   const value = useMemo(
     () => ({
       state,
@@ -517,6 +604,9 @@ export function SkinProvider({ children }) {
       applyPreset,
       addScheme,
       removeScheme,
+      removeSchemes,
+      toggleSchemeSelect,
+      clearSchemeSelection,
       duplicateScheme,
       setStyle,
       setLayout,
@@ -533,6 +623,7 @@ export function SkinProvider({ children }) {
       removeSchemeFromFile,
       exportWeaselCopy,
       exportSkinYaml,
+      saveSchemes,
       canWriteFile,
       fileStatus,
     }),
@@ -550,6 +641,9 @@ export function SkinProvider({ children }) {
       applyPreset,
       addScheme,
       removeScheme,
+      removeSchemes,
+      toggleSchemeSelect,
+      clearSchemeSelection,
       duplicateScheme,
       setStyle,
       setLayout,
@@ -566,6 +660,7 @@ export function SkinProvider({ children }) {
       removeSchemeFromFile,
       exportWeaselCopy,
       exportSkinYaml,
+      saveSchemes,
       canWriteFile,
       fileStatus,
     ],

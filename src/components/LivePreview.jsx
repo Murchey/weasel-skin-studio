@@ -8,14 +8,20 @@ function ptToPx(pt, fallback = 14) {
 }
 
 /**
- * Live preview aligned with Weasel:
- * - candidate / selected hilite outer margin is 0
- * - hilite_padding is inner padding of the highlight box
- * - hilite_spacing is the gap between mark/label/text/comment
- * - candidate_spacing is the gap between candidate items
+ * Weasel-accurate candidate window:
+ *
+ *   xiao lang hao shu ru fa   ← composition, dotted underline
+ *   ┌─────────────────────┐
+ *   │[1 小狼毫输入法] 2 …  │  ← border, selected hilite
+ *   └─────────────────────┘
+ *
+ * - selected outer margin = 0
+ * - hilite_padding = inner padding of the selected box
+ * - hilite_spacing = gap between mark / label / text / comment
+ * - candidate_spacing = gap between candidates
  */
 export default function LivePreview() {
-  const { state, activeScheme } = useSkin()
+  const { state, activeScheme, setSample } = useSkin()
   const style = state.style
   const colors = activeScheme?.colors || {}
   const L = style.layout || {}
@@ -30,169 +36,191 @@ export default function LivePreview() {
   const fontPx = ptToPx(style.font_point)
   const labelPx = ptToPx(style.label_font_point, 12)
   const commentPx = ptToPx(style.comment_font_point, 12)
+  const hiliteGap = L.hilite_spacing ?? 6
+  const hilitePad = L.hilite_padding ?? 0
+  const candGap = L.candidate_spacing ?? 12
 
   const windowStyle = useMemo(() => {
-    const border = css('border_color', 'rgba(0,0,0,0.12)')
+    const border = css('border_color', 'rgba(196, 160, 0, 0.9)')
     return {
-      background: css('back_color', 'rgba(255,255,255,0.96)'),
-      border: `${L.border_width || 0}px solid ${border}`,
-      borderRadius: `${L.corner_radius || 0}px`,
+      background: css('back_color', 'rgba(28, 28, 28, 0.96)'),
+      border: `${L.border_width || 1}px solid ${border}`,
+      borderRadius: `${L.corner_radius || 10}px`,
       boxShadow:
         (L.shadow_radius || 0) > 0
-          ? `0 ${L.shadow_offset_y ?? 4}px ${(L.shadow_radius || 6) * 2}px rgba(0,0,0,0.22)`
-          : '0 8px 28px rgba(0,0,0,0.18)',
-      // window content margin — NOT candidate inner padding
-      padding: `${L.margin_y ?? 8}px ${L.margin_x ?? 8}px`,
-      color: css('text_color', '#111'),
-      fontFamily: style.font_face || 'Segoe UI, sans-serif',
+          ? `0 ${L.shadow_offset_y ?? 4}px ${(L.shadow_radius || 6) * 2}px rgba(0,0,0,0.28)`
+          : '0 10px 28px rgba(0,0,0,0.22)',
+      // 候选窗外框：padding 固定 0（与 Weasel 对齐）
+      padding: 0,
+      color: css('text_color', '#ddd'),
+      fontFamily: style.font_face || 'Segoe UI, Microsoft YaHei, sans-serif',
     }
   }, [colors, L, style.font_face])
 
-  const preeditStyle = {
-    color: css('preedit_color', css('text_color', '#111')),
-    background: css('preedit_back_color', 'transparent'),
-    fontSize: fontPx,
-  }
-
-  const preeditHiliteStyle = {
-    color: css('hilited_text_color', css('hilited_preedit_color', css('preedit_color', '#111'))),
-    background: css('hilited_back_color', css('hilited_preedit_back_color', 'rgba(0,0,0,0.08)')),
-    borderRadius: `${L.round_corner || 4}px`,
-    // Weasel preedit hilite is tight — no inner padding
-    padding: 0,
-    lineHeight: 1.35,
-  }
+  // composition / preedit — dotted underline like Weasel
+  const preeditColor = css('preedit_color', css('text_color', '#ddd'))
+  const preeditHiliteColor = css(
+    'hilited_text_color',
+    css('hilited_preedit_color', css('preedit_color', '#fff')),
+  )
+  const preeditHiliteBg = css('hilited_back_color', 'transparent')
+  const preeditBorder = css('hilited_preedit_back_color', 'transparent')
 
   function formatLabel(i) {
-    const fmt = style.label_format || '%s.'
+    const fmt = style.label_format || '%s'
     return fmt.replace('%s', String(i + 1))
   }
 
-  const markVisible = state.selectedCandidate >= 0 && (style.mark_text || colors.hilited_mark_color)
+  const markVisible = !!(style.mark_text || colors.hilited_mark_color)
 
-  function markStyle(selected) {
-    return {
-      color: css('hilited_mark_color', css('hilited_candidate_text_color', css('text_color'))),
-      fontSize: fontPx,
-      lineHeight: 1.2,
-      // no extra inner pad
-      padding: 0,
-    }
-  }
-
-  function labelStyle(selected) {
-    return {
-      color: selected
-        ? css('hilited_label_color', css('hilited_candidate_label_color', css('label_color', '#2563eb')))
-        : css('label_color', '#666'),
-      fontSize: labelPx,
-      lineHeight: 1.25,
-      fontFamily: style.label_font_face || undefined,
-      padding: 0,
-    }
-  }
-
-  function textStyle(selected) {
-    return {
-      color: selected
-        ? css('hilited_candidate_text_color', css('candidate_text_color', css('text_color', '#111')))
-        : css('candidate_text_color', css('text_color', '#111')),
-      fontSize: fontPx,
-      lineHeight: 1.35,
-      padding: 0,
-    }
-  }
-
-  function commentStyle(selected) {
-    return {
-      color: selected
-        ? css('hilited_comment_text_color', css('hilited_candidate_comment_color', css('comment_color', '#888')))
-        : css('comment_color', '#888'),
-      fontSize: commentPx,
-      lineHeight: 1.25,
-      fontFamily: style.comment_font_face || undefined,
-      padding: 0,
-    }
-  }
-
-  function rowVars(index) {
-    const selected = index === state.selectedCandidate
-    return {
-      '--hilite-spacing': `${L.hilite_spacing ?? 6}px`,
-      '--hilite-padding': `${L.hilite_padding ?? 0}px`,
-      '--hilite-radius': `${L.round_corner || 0}px`,
-      '--hilite-bg': selected
-        ? css('hilited_candidate_back_color', 'rgba(245, 158, 11, 0.28)')
-        : 'transparent',
-      '--hilite-fg': selected
-        ? css('hilited_candidate_text_color', css('text_color', '#111'))
-        : 'inherit',
-      '--hilite-border-w': selected && colors.hilited_candidate_border_color ? '1px' : '0px',
-      '--hilite-border': selected
-        ? css('hilited_candidate_border_color', 'transparent')
-        : 'transparent',
-      '--hilite-shadow':
-        selected && colors.hilited_candidate_shadow_color
-          ? `0 2px 8px ${css('hilited_candidate_shadow_color', 'transparent')}`
-          : 'none',
-    }
-  }
-
-  const candidates = state.sampleCandidates
   const listStyle = isHorizontal
     ? {
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'stretch',
-        // candidate_spacing between items
-        gap: `${L.candidate_spacing ?? 22}px`,
+        alignContent: 'stretch',
+        gap: `${candGap}px`,
+        width: '100%',
+        minHeight: `${Math.round(fontPx * 1.7 + hilitePad * 2)}px`,
       }
     : {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        gap: `${L.candidate_spacing ?? 22}px`,
+        gap: `${candGap}px`,
+        width: '100%',
       }
 
   return (
-    <div className="inline-block min-w-[320px] max-w-full select-none" style={windowStyle}>
-      {!style.inline_preedit && (
-        <div
-          className="mb-2 flex items-center"
-          style={{ ...preeditStyle, gap: `${L.hilite_spacing ?? 6}px` }}
+    <div className="inline-block min-w-[360px] max-w-full select-none">
+      {/* composition / preedit — OUTSIDE the candidate window (like 终末地) */}
+      <div
+        className="mb-1.5 px-0.5"
+        style={{
+          color: preeditColor,
+          fontSize: fontPx,
+          lineHeight: 1.45,
+          fontFamily: style.font_face || undefined,
+        }}
+      >
+        <span
+          style={{
+            borderBottom: `1px dotted ${preeditColor}`,
+            color: preeditHiliteColor,
+            background: preeditHiliteBg !== 'transparent' ? preeditHiliteBg : undefined,
+            padding: preeditHiliteBg !== 'transparent' ? '0 2px' : 0,
+          }}
         >
-          <span style={preeditHiliteStyle}>zhongwen</span>
-          <span className="opacity-60">|</span>
-        </div>
-      )}
-
-      <div style={listStyle}>
-        {candidates.map((c, i) => {
-          const selected = i === state.selectedCandidate
-          return (
-            <div
-              key={i}
-              className={`cand-row${selected ? ' is-selected' : ''}`}
-              style={rowVars(i)}
-              onClick={() => {}}
-            >
-              {markVisible && selected && (
-                <span style={markStyle(selected)}>{style.mark_text || '▌'}</span>
-              )}
-              <span style={labelStyle(selected)}>{formatLabel(i)}</span>
-              <span style={textStyle(selected)}>{c.text}</span>
-              {c.comment ? <span style={commentStyle(selected)}>{c.comment}</span> : null}
-            </div>
-          )
-        })}
+          {state.sampleText || 'zhongwen'}
+        </span>
+        <span
+          style={{
+            display: 'inline-block',
+            width: 1,
+            height: '1em',
+            marginLeft: 2,
+            verticalAlign: '-0.15em',
+            background: preeditColor,
+            opacity: 0.75,
+          }}
+        />
       </div>
 
-      <div
-        className="mt-2 flex items-center justify-end gap-3 text-xs opacity-80"
-        style={{ color: css('text_color', 'inherit') }}
-      >
-        <span style={{ color: css('prevpage_color', css('text_color')) }}>◀</span>
-        <span style={{ color: css('nextpage_color', css('text_color')) }}>▶</span>
+      {/* candidate window — gold border + dark fill */}
+      <div style={windowStyle}>
+        <div style={listStyle}>
+          {state.sampleCandidates.map((c, i) => {
+            const selected = i === state.selectedCandidate
+            const bg = selected
+              ? css('hilited_candidate_back_color', 'rgba(196, 160, 0, 0.95)')
+              : css('candidate_back_color', 'transparent')
+            const fg = selected
+              ? css('hilited_candidate_text_color', css('candidate_text_color', '#1a1a1a'))
+              : css('candidate_text_color', css('text_color', '#ddd'))
+            const labelColor = selected
+              ? css('hilited_candidate_label_color', css('hilited_label_color', fg))
+              : css('label_color', fg)
+            const commentColor = selected
+              ? css('hilited_comment_text_color', css('comment_color', fg))
+              : css('comment_color', css('text_color', '#999'))
+            const borderColor = selected
+              ? css('hilited_candidate_border_color', 'transparent')
+              : css('candidate_border_color', 'transparent')
+
+            return (
+              <div
+                key={i}
+                onClick={() => setSample(i)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: hiliteGap,
+                  margin: 0,
+                  // stretch to full cell so the hilite background fills the node
+                  alignSelf: 'stretch',
+                  height: '100%',
+                  minHeight: `${Math.round(fontPx * 1.7)}px`,
+                  padding: `0 ${hilitePad}px`,
+                  borderRadius: `${L.round_corner || 6}px`,
+                  background: bg,
+                  color: fg,
+                  border:
+                    borderColor !== 'transparent'
+                      ? `1px solid ${borderColor}`
+                      : '1px solid transparent',
+                  cursor: 'default',
+                  lineHeight: 1.3,
+                  whiteSpace: 'nowrap',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {markVisible && selected && (
+                  <span
+                    style={{
+                      color: css('hilited_mark_color', fg),
+                      fontSize: fontPx,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {style.mark_text || ''}
+                  </span>
+                )}
+                <span
+                  style={{
+                    color: labelColor,
+                    fontSize: labelPx,
+                    fontFamily: style.label_font_face || undefined,
+                  }}
+                >
+                  {formatLabel(i)}
+                </span>
+                <span style={{ fontSize: fontPx }}>{c.text}</span>
+                {c.comment ? (
+                  <span
+                    style={{
+                      color: commentColor,
+                      fontSize: commentPx,
+                      fontFamily: style.comment_font_face || undefined,
+                      opacity: 0.92,
+                    }}
+                  >
+                    {c.comment}
+                  </span>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+
+        {(colors.prevpage_color || colors.nextpage_color) && (
+          <div
+            className="mt-1.5 flex items-center justify-end gap-2"
+            style={{ fontSize: Math.max(10, fontPx - 3) }}
+          >
+            <span style={{ color: css('prevpage_color', css('text_color')) }}>◀</span>
+            <span style={{ color: css('nextpage_color', css('text_color')) }}>▶</span>
+          </div>
+        )}
       </div>
     </div>
   )
