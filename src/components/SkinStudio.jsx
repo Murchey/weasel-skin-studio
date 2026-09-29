@@ -14,6 +14,7 @@ import { Radio } from '@heroui/react'
 import ColorField from './ColorField.jsx'
 import LivePreview from './LivePreview.jsx'
 import { SkinProvider, useSkin } from '../store/skinStore.jsx'
+import { useThemeMode } from '../hooks/useThemeMode.js'
 import { COLOR_FIELDS, COLOR_GROUPS } from '../utils/weaselYaml.js'
 import { PRESET_SCHEMES } from '../data/presets.js'
 import { toCss } from '../utils/color.js'
@@ -24,16 +25,17 @@ const groupOrder = ['window', 'preedit', 'candidate', 'comment', 'hilited', 'pag
 function RangeRow({ label, value, min, max, unit = 'px', onChange }) {
   return (
     <div className="flex items-center gap-3 py-1.5">
-      <label className="w-24 shrink-0 text-xs text-zinc-600">{label}</label>
+      <label className="w-24 shrink-0 text-xs app-muted">{label}</label>
       <input
         type="range"
-        className="h-1.5 flex-1 accent-blue-600"
+        className="h-1.5 flex-1"
+        style={{ accentColor: 'var(--accent)' }}
         min={min}
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      <span className="mono w-12 text-right text-[11px] text-zinc-700">
+      <span className="mono w-12 text-right text-[11px] app-muted">
         {value}
         {unit}
       </span>
@@ -44,15 +46,39 @@ function RangeRow({ label, value, min, max, unit = 'px', onChange }) {
 function FormRow({ label, children }) {
   return (
     <div className="flex items-start gap-3 py-1.5">
-      <label className="w-24 shrink-0 pt-2 text-xs text-zinc-600">{label}</label>
+      <label className="w-24 shrink-0 pt-2 text-xs app-muted">{label}</label>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
+  )
+}
+
+function ThemeToggle({ theme, toggle }) {
+  return (
+    <Button
+      isIconOnly
+      size="sm"
+      variant="flat"
+      aria-label={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+      onPress={toggle}
+    >
+      {theme === 'dark' ? (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z" />
+        </svg>
+      )}
+    </Button>
   )
 }
 
 function StudioBody() {
   const store = useSkin()
   const { state, activeScheme, colorFormat } = store
+  const { theme, toggle } = useThemeMode()
   const [rightTab, setRightTab] = useState('color')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewText, setPreviewText] = useState('')
@@ -163,15 +189,15 @@ function StudioBody() {
         : 'v'
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-zinc-100">
-      <header className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
+    <div className="app-shell flex h-full min-h-0 flex-col">
+      <header className="app-panel flex items-center gap-3 border-b px-4 py-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-400 font-bold text-zinc-950">
+          <div className="brand-mark flex h-9 w-9 items-center justify-center rounded-xl font-bold">
             W
           </div>
           <div>
-            <div className="text-sm font-semibold text-zinc-900">Weasel Skin Studio</div>
-            <div className="text-[11px] text-zinc-500">
+            <div className="text-sm font-semibold">Weasel Skin Studio</div>
+            <div className="text-[11px] app-muted">
               {state.file.loaded ? `${state.file.name} · ${fileLabel}` : '可视化皮肤工坊'}
             </div>
           </div>
@@ -180,6 +206,7 @@ function StudioBody() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-2">
+          <ThemeToggle theme={theme} toggle={toggle} />
           <Button size="sm" variant="flat" onPress={onOpenFile}>
             {state.file.loaded ? '更换文件' : '打开 weasel.yaml'}
           </Button>
@@ -205,10 +232,10 @@ function StudioBody() {
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_320px]">
-        <aside className="scroll-y border-r border-zinc-200 bg-white p-3">
+        <aside className="scroll-y app-panel border-r p-3">
           <section className="mb-5">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-700">配色</span>
+              <span className="text-xs font-semibold">配色</span>
               <Button size="sm" variant="light" color="primary" onPress={() => store.addScheme()}>
                 + 新建
               </Button>
@@ -219,29 +246,29 @@ function StudioBody() {
                   key={s.id}
                   className={`cursor-pointer rounded-xl border p-2 transition ${
                     s.id === state.activeSchemeId
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-zinc-200 hover:border-zinc-300'
+                      ? 'border-(--accent) bg-(--accent-soft)'
+                      : 'border-(--app-border) hover:border-(--accent)'
                   }`}
                   onClick={() => store.selectScheme(s.id)}
                 >
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
                       <span
-                        className="h-5 w-5 rounded border border-zinc-300"
+                        className="h-5 w-5 rounded border border-(--app-border)"
                         style={{ background: s.colors.back_color ? toCss(s.colors.back_color) : '#333' }}
                       />
                       <span
-                        className="h-5 w-5 rounded border border-zinc-300"
+                        className="h-5 w-5 rounded border border-(--app-border)"
                         style={swatchChip(s)}
                       />
                       <span
-                        className="h-5 w-5 rounded border border-zinc-300"
+                        className="h-5 w-5 rounded border border-(--app-border)"
                         style={{ background: s.colors.text_color ? toCss(s.colors.text_color) : '#ccc' }}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-medium text-zinc-800">{s.name}</div>
-                      <div className="truncate text-[10px] text-zinc-500">
+                      <div className="truncate text-xs font-medium ">{s.name}</div>
+                      <div className="truncate text-[10px] app-muted">
                         {sourceTag(s)} · {s.id}
                       </div>
                     </div>
@@ -279,15 +306,15 @@ function StudioBody() {
 
           <section>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-700">预设</span>
-              <span className="text-[10px] text-zinc-500">点击应用</span>
+              <span className="text-xs font-semibold">预设</span>
+              <span className="text-[10px] app-muted">点击应用</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {PRESET_SCHEMES.map((p) => (
                 <button
                   key={p.id}
                   type="button"
-                  className="rounded-xl border border-zinc-200 p-2 text-left transition hover:border-blue-400"
+                  className="rounded-xl border border-(--app-border) p-2 text-left transition hover:border-(--accent)"
                   style={swatchPreview(p)}
                   onClick={() => store.applyPreset(p)}
                 >
@@ -305,7 +332,7 @@ function StudioBody() {
         </aside>
 
         <main className="flex min-h-0 flex-col">
-          <div className="flex items-center gap-3 border-b border-zinc-200 bg-white px-3 py-2">
+          <div className="flex items-center gap-3 app-panel border-b px-3 py-2">
             <RadioGroup
               orientation="horizontal"
               value={state.stageMode}
@@ -317,22 +344,16 @@ function StudioBody() {
               <Radio value="dark">深色</Radio>
               <Radio value="desktop">桌面</Radio>
             </RadioGroup>
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] app-muted">
               {state.style.inline_preedit ? '行内预编辑' : '独立候选窗'} ·{' '}
               {layoutMode === 'h' ? '横排' : layoutMode === 'vt' ? '竖排文本' : '竖排'} ·{' '}
               {state.style.font_point}pt
             </span>
             <div className="flex-1" />
-            <span className="text-[11px] text-zinc-500">{state.dirty ? '有未保存修改' : '已同步'}</span>
+            <span className="text-[11px] app-muted">{state.dirty ? '有未保存修改' : '已同步'}</span>
           </div>
           <div
-            className={`scroll-y flex flex-1 items-center justify-center p-8 ${
-              state.stageMode === 'dark'
-                ? 'bg-zinc-800'
-                : state.stageMode === 'desktop'
-                  ? 'bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900'
-                  : 'bg-zinc-200/80'
-            }`}
+            className={`scroll-y flex flex-1 items-center justify-center p-8 stage-${state.stageMode}`}
           >
             <div className="preview-frame rounded-2xl">
               <LivePreview />
@@ -340,13 +361,13 @@ function StudioBody() {
           </div>
         </main>
 
-        <aside className="scroll-y border-l border-zinc-200 bg-white">
-          <section className="border-b border-zinc-200 p-3">
+        <aside className="scroll-y app-panel border-l">
+          <section className="border-b border-(--app-border) p-3">
             <div className="mb-2 flex items-center gap-2">
               <span
-                className={`h-2 w-2 rounded-full ${state.file.lastSavedAt ? 'bg-emerald-500' : 'bg-zinc-300'}`}
+                className={`h-2 w-2 rounded-full ${state.file.lastSavedAt ? 'bg-emerald-500' : 'bg-(--app-muted)'}`}
               />
-              <span className="min-w-0 flex-1 truncate text-xs text-zinc-700">
+              <span className="min-w-0 flex-1 truncate text-xs">
                 {state.file.lastAction || (state.file.loaded ? fileLabel : '未绑定 weasel.yaml')}
               </span>
             </div>
@@ -369,7 +390,7 @@ function StudioBody() {
                 从文件删除
               </Button>
             </div>
-            <div className="text-[10px] leading-relaxed text-zinc-500">
+            <div className="text-[10px] leading-relaxed app-muted">
               保存 = 当前配色 + 字体/布局写入已打开的 weasel.yaml
             </div>
           </section>
@@ -406,7 +427,7 @@ function StudioBody() {
                 </div>
                 {groupOrder.map((g) => (
                   <div key={g} className="mb-4">
-                    <div className="mb-1 text-[11px] font-semibold text-zinc-500">
+                    <div className="mb-1 text-[11px] font-semibold app-muted">
                       {COLOR_GROUPS[g]}
                     </div>
                     {(groupedFields[g] || []).map((f) => (
@@ -624,17 +645,17 @@ function StudioBody() {
 
       {previewOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6">
-          <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl">
-            <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold">
+          <div className="app-panel w-full max-w-3xl rounded-2xl shadow-xl">
+            <div className="border-b border-(--app-border) px-5 py-3 text-sm font-semibold">
               {previewTitle}
             </div>
             <div className="p-5">
-              <div className="mb-2 text-[11px] text-zinc-500">
+              <div className="mb-2 text-[11px] app-muted">
                 下列文本将在「保存」时写入 weasel.yaml（其余内容保留）
               </div>
               <textarea className="yaml-box" readOnly value={previewText} />
             </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-3">
+            <div className="flex justify-end gap-2 border-t border-(--app-border) px-5 py-3">
               <Button variant="flat" onPress={() => setPreviewOpen(false)}>
                 关闭
               </Button>

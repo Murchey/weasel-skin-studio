@@ -32,14 +32,14 @@ export default function ColorField({ fieldKey, label, optional = false }) {
 
   return (
     <div className="flex items-center gap-2 border-b border-zinc-200/80 py-2 last:border-b-0">
-      <div className="w-28 shrink-0">
-        <div className="text-xs font-medium text-zinc-800">{label}</div>
-        <div className="mono text-[10px] text-zinc-500">{weaselVal}</div>
-      </div>
+        <div className="w-28 shrink-0">
+          <div className="text-xs font-medium">{label}</div>
+          <div className="mono text-[10px] app-muted">{weaselVal}</div>
+        </div>
 
-      <div className="flex flex-1 items-center gap-2">
-        <label
-          className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-zinc-300"
+        <div className="flex flex-1 items-center gap-2">
+          <label
+            className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-(--app-border)"
           style={{
             background: value
               ? css
@@ -65,7 +65,7 @@ export default function ColorField({ fieldKey, label, optional = false }) {
 
         {value && (
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="mono w-8 text-[11px] text-zinc-600">{value.a ?? 255}</span>
+            <span className="mono w-8 text-[11px] app-muted">{value.a ?? 255}</span>
             <Tooltip content="透明度 0–255">
               <Slider
                 aria-label={`${label} 透明度`}

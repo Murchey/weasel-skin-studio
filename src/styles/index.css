@@ -1,9 +1,77 @@
 @import "tailwindcss";
 @import "@heroui/react/styles";
 
+/* =========================================================
+ * Weasel Skin Studio · “Uber-like” theme
+ * Accent filled with yellow; light / dark via data-theme
+ * ========================================================= */
+
 @theme {
   --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  --color-brand-50: #fffbeb;
+  --color-brand-100: #fef3c7;
+  --color-brand-200: #fde68a;
+  --color-brand-300: #fcd34d;
+  --color-brand-400: #fbbf24;
+  --color-brand-500: #f59e0b;
+  --color-brand-600: #d97706;
+  --color-brand-ink: #111111;
+}
+
+:root,
+.light,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* yellow fill accent */
+  --accent: oklch(0.795 0.16 85);
+  --accent-foreground: var(--black);
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--black) 12%);
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
+  --accent-soft-foreground: color-mix(in oklab, var(--accent) 72%, var(--black) 28%);
+  --accent-soft-hover: color-mix(in oklab, var(--accent) 28%, transparent);
+
+  --focus: var(--accent);
+  --field-focus: color-mix(in oklab, var(--accent) 35%, var(--white) 65%);
+
+  --warning: var(--accent);
+  --warning-foreground: var(--black);
+
+  /* app chrome */
+  --app-bg: #f4f4f5;
+  --app-panel: #ffffff;
+  --app-border: #e4e4e7;
+  --app-muted: #71717a;
+  --app-stage: #e4e4e7;
+  --app-stage-grad-a: #d4d4d8;
+  --app-stage-grad-b: #3f3f46;
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --accent: oklch(0.84 0.15 88);
+  --accent-foreground: var(--black);
+  --accent-hover: color-mix(in oklab, var(--accent) 90%, var(--white) 10%);
+  --accent-soft: color-mix(in oklab, var(--accent) 14%, transparent);
+  --accent-soft-foreground: color-mix(in oklab, var(--accent) 85%, var(--white) 15%);
+  --accent-soft-hover: color-mix(in oklab, var(--accent) 22%, transparent);
+
+  --focus: var(--accent);
+  --field-focus: color-mix(in oklab, var(--accent) 25%, var(--eclipse) 75%);
+
+  --warning: var(--accent);
+  --warning-foreground: var(--black);
+
+  --app-bg: #09090b;
+  --app-panel: #111113;
+  --app-border: #27272a;
+  --app-muted: #a1a1aa;
+  --app-stage: #18181b;
+  --app-stage-grad-a: #27272a;
+  --app-stage-grad-b: #000000;
 }
 
 html,
@@ -14,8 +82,31 @@ body,
 }
 
 body {
-  @apply bg-zinc-100 text-zinc-900 antialiased;
   font-family: var(--font-sans);
+  background: var(--app-bg);
+  color: var(--foreground);
+  antialiased: true;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  height: 100%;
+  background: var(--app-bg);
+  color: var(--foreground);
+}
+
+.app-panel {
+  background: var(--app-panel);
+  border-color: var(--app-border);
+}
+
+.app-muted {
+  color: var(--app-muted);
+}
+
+.brand-mark {
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .scroll-y {
@@ -30,12 +121,48 @@ body {
   width: 100%;
   min-height: 280px;
   resize: vertical;
-  border-radius: 10px;
-  border: 1px solid #e4e4e7;
-  background: #fafafa;
+  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  background: color-mix(in oklab, var(--app-panel) 92%, var(--app-bg) 8%);
   padding: 12px;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.55;
-  color: #27272a;
+  color: var(--foreground);
+}
+
+/* stage backgrounds */
+.stage-light {
+  background: var(--app-stage);
+}
+.stage-dark {
+  background: #27272a;
+}
+.stage-desktop {
+  background: linear-gradient(145deg, var(--app-stage-grad-a), var(--app-stage-grad-b));
+}
+
+/* preview candidate: match Weasel — selected highlight has NO inner padding */
+.cand-row {
+  display: flex;
+  align-items: center;
+  /* hilite_spacing = gap between mark / label / text / comment */
+  gap: var(--hilite-spacing, 6px);
+  /* no internal padding inside the hilited block */
+  padding: 0;
+  /* hilite_padding = outside spacing of the highlight, not inner pad */
+  margin: 0 calc(var(--hilite-padding, 8px) / 2);
+  border-radius: var(--hilite-radius, 4px);
+  box-sizing: border-box;
+}
+
+.cand-row.is-selected {
+  background: var(--hilite-bg, transparent);
+  color: var(--hilite-fg, inherit);
+  border: var(--hilite-border-w, 0px) solid var(--hilite-border, transparent);
+  box-shadow: var(--hilite-shadow, none);
+}
+
+.cand-row:not(.is-selected) {
+  background: transparent;
 }
