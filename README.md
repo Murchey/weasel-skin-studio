@@ -1,7 +1,7 @@
 # Weasel Skin Studio
 
 小狼毫（Weasel）输入法 **可视化皮肤调色工具**。  
-基于 **Tauri 2 + Vue 3 + Element Plus + Vite**，可实时预览并回写本机 `weasel.yaml`。
+基于 **Tauri 2 + React 19 + HeroUI + Vite**，可实时预览并回写本机 `weasel.yaml`。
 
 - 英文文档：[README.en.md](./README.en.md)
 - 许可证：[GPL-3.0](./LICENSE)
@@ -109,8 +109,8 @@ build-release.bat --skip-build
 | 层 | 技术 |
 |----|------|
 | 桌面壳 | Tauri 2 |
-| 前端 | Vue 3（SFC） |
-| UI | Element Plus |
+| 前端 | React 19 |
+| UI | [HeroUI](https://heroui.com) 3 + Tailwind CSS 4 |
 | 构建 | Vite 6 |
 | YAML | js-yaml |
 | 系统能力 | `@tauri-apps/plugin-fs` / `plugin-dialog` |
@@ -123,12 +123,13 @@ weasel-skin-studio/
 ├── package.json
 ├── vite.config.js
 ├── index.html
-├── src/                       # Vue 前端
-│   ├── App.vue
+├── src/                       # React 前端
+│   ├── App.jsx
+│   ├── main.jsx
 │   ├── components/            # SkinStudio · LivePreview · ColorField
-│   ├── composables/           # useSkinStore
+│   ├── store/                 # skinStore（React Context）
 │   ├── data/presets.js        # 内置配色预设
-│   ├── styles/main.css
+│   ├── styles/index.css       # Tailwind + HeroUI
 │   └── utils/                 # color · weaselYaml · weaselFileEdit · fileAccess
 └── src-tauri/                 # Tauri / Rust
     ├── tauri.conf.json

@@ -1,7 +1,7 @@
 # Weasel Skin Studio
 
 A visual skin / theme studio for the **Weasel** input method (小狼毫).  
-Built with **Tauri 2 + Vue 3 + Element Plus + Vite**. Preview skins in real time and write them back to your local `weasel.yaml`.
+Built with **Tauri 2 + React 19 + HeroUI + Vite**. Preview skins in real time and write them back to your local `weasel.yaml`.
 
 - Chinese docs: [README.md](./README.md)
 - License: [GPL-3.0](./LICENSE)
@@ -109,8 +109,8 @@ Version is read from the `version` field in root `package.json`.
 | Layer | Tech |
 |-------|------|
 | Desktop shell | Tauri 2 |
-| Frontend | Vue 3 SFC |
-| UI | Element Plus |
+| Frontend | React 19 |
+| UI | [HeroUI](https://heroui.com) 3 + Tailwind CSS 4 |
 | Bundler | Vite 6 |
 | YAML | js-yaml |
 | System APIs | `@tauri-apps/plugin-fs` / `plugin-dialog` |
@@ -123,12 +123,13 @@ weasel-skin-studio/
 ├── package.json
 ├── vite.config.js
 ├── index.html
-├── src/                       # Vue frontend
-│   ├── App.vue
+├── src/                       # React frontend
+│   ├── App.jsx
+│   ├── main.jsx
 │   ├── components/            # SkinStudio · LivePreview · ColorField
-│   ├── composables/           # useSkinStore
+│   ├── store/                 # skinStore (React Context)
 │   ├── data/presets.js        # built-in color presets
-│   ├── styles/main.css
+│   ├── styles/index.css       # Tailwind + HeroUI
 │   └── utils/                 # color · weaselYaml · weaselFileEdit · fileAccess
 └── src-tauri/                 # Tauri / Rust
     ├── tauri.conf.json

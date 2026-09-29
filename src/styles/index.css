@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+
+@theme {
+  --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-zinc-100 text-zinc-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+.scroll-y {
+  overflow-y: auto;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.yaml-box {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: #27272a;
+}
