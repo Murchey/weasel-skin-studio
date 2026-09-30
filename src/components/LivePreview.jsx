@@ -42,26 +42,25 @@ export default function LivePreview() {
     if (!inspect) return false
     return Array.isArray(keys) ? keys.includes(inspect) : keys === inspect
   }
+  // 内嵌描边，不改变盒模型、不被 overflow 裁切
   const inspStyle = (keys, soft = false) => {
     if (!inspHit(keys)) return undefined
     return {
-      outline: soft ? '2px dashed #3b82f6' : '2px solid #3b82f6',
-      outlineOffset: soft ? 3 : 1,
       boxShadow: soft
-        ? '0 0 0 4px rgba(59,130,246,0.18)'
-        : '0 0 0 3px rgba(59,130,246,0.35)',
-      position: 'relative',
+        ? 'inset 0 0 0 2px rgba(59,130,246,0.85), 0 0 0 2px rgba(59,130,246,0.15)'
+        : 'inset 0 0 0 2px #3b82f6, 0 0 0 2px rgba(59,130,246,0.35)',
       zIndex: 2,
     }
   }
+  // 角标放在区域内部左上，避免定位到框外被裁切
   const inspTag = (keys, label) =>
     inspHit(keys) ? (
       <span
         style={{
           position: 'absolute',
-          top: -10,
-          left: 8,
-          zIndex: 3,
+          top: 2,
+          left: 2,
+          zIndex: 5,
           background: '#3b82f6',
           color: '#fff',
           fontSize: 10,
@@ -70,6 +69,7 @@ export default function LivePreview() {
           borderRadius: 4,
           whiteSpace: 'nowrap',
           pointerEvents: 'none',
+          opacity: 0.95,
         }}
       >
         {label}

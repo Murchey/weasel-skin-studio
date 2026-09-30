@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
   Button,
-  Toast,
-  toast,
   Dropdown,
   Input,
   Modal,
@@ -17,6 +15,7 @@ import LivePreview from './LivePreview.jsx'
 import { SkinProvider, useSkin } from '../store/skinStore.jsx'
 import { useThemeMode } from '../hooks/useThemeMode.js'
 import { InspectProvider, InspectLabel, useInspect } from '../hooks/useInspect.jsx'
+import { ToastProvider, useToast } from '../hooks/useToast.jsx'
 import { usePanelWidth, PanelResizer } from '../hooks/usePanelWidth.jsx'
 import { COLOR_FIELDS, COLOR_GROUPS } from '../utils/weaselYaml.js'
 import { PRESET_SCHEMES } from '../data/presets.js'
@@ -128,6 +127,7 @@ function StudioBody() {
   const store = useSkin()
   const { state, activeScheme, colorFormat } = store
   const { theme, toggle } = useThemeMode()
+  const showToast = useToast()
   const leftPanel = usePanelWidth('wss-panel-left', 'left', 240)
   const rightPanel = usePanelWidth('wss-panel-right', 'right', 320)
   const [rightTab, setRightTab] = useState('color')
@@ -160,7 +160,7 @@ function StudioBody() {
     try {
       await store.openWeaselFile()
     } catch (e) {
-      if (e?.name !== 'AbortError') toast.danger(e?.message || String(e), { title: '打开失败' })
+      if (e?.name !== 'AbortError') showToast.danger(e?.message || String(e), { title: '打开失败' })
     }
   }
 
@@ -172,7 +172,7 @@ function StudioBody() {
       setConfirmAction(() => onSave)
       setPreviewOpen(true)
     } catch (e) {
-      toast.danger(e?.message || String(e), { title: '预览失败' })
+      showToast.danger(e?.message || String(e), { title: '预览失败' })
     }
   }
 
@@ -185,13 +185,13 @@ function StudioBody() {
     setSaveChoiceOpen(false)
     try {
       if (!state.file.loaded) {
-        toast.warning('尚未打开源文件。可先「打开配置文件」，或选择「另存为」。', { title: '无法覆盖' })
+        showToast.warning('尚未打开源文件。可先「打开配置文件」，或选择「另存为」。', { title: '无法覆盖' })
         return
       }
       await store.overwriteSource()
-      toast.success(`已覆盖 ${state.file.name || '源文件'}`, { title: '保存成功' })
+      showToast.success(`已覆盖 ${state.file.name || '源文件'}`, { title: '保存成功' })
     } catch (e) {
-      toast.danger(e?.message || String(e), { title: '保存失败' })
+      showToast.danger(e?.message || String(e), { title: '保存失败' })
     }
   }
 
@@ -200,12 +200,12 @@ function StudioBody() {
     try {
       const result = await store.saveAsFile(kind)
       if (result?.ok) {
-        toast.success(`已保存为 ${result.savedAs || '文件'}`, { title: '另存成功' })
+        showToast.success(`已保存为 ${result.savedAs || '文件'}`, { title: '另存成功' })
       } else {
-        toast.info('已取消另存', { title: '未保存' })
+        showToast.info('已取消另存', { title: '未保存' })
       }
     } catch (e) {
-      toast.danger(e?.message || String(e), { title: '另存失败' })
+      showToast.danger(e?.message || String(e), { title: '另存失败' })
     }
   }
 
@@ -224,9 +224,9 @@ function StudioBody() {
     if (!window.confirm(`从 weasel.yaml 删除方案「${id}」？`)) return
     try {
       await store.removeSchemeFromFile(id)
-      toast.success(`已从文件删除「${id}」`, { title: '删除成功' })
+      showToast.success(`已从文件删除「${id}」`, { title: '删除成功' })
     } catch (e) {
-      toast.danger(e?.message || String(e), { title: '删除失败' })
+      showToast.danger(e?.message || String(e), { title: '删除失败' })
     }
   }
 
@@ -234,13 +234,13 @@ function StudioBody() {
     if (kind === 'copy') store.exportWeaselCopy()
     if (kind === 'skin') store.exportSkinYaml()
     if (kind === 'active') {
-      navigator.clipboard?.writeText(store.exportActive()).then(() => toast.success('已复制当前方案 YAML'))
+      navigator.clipboard?.writeText(store.exportActive()).then(() => showToast.success('已复制当前方案 YAML'))
     }
   }
 
   function copySchemeYaml() {
     if (!activeScheme) return
-    navigator.clipboard?.writeText(exportSchemeYaml(activeScheme)).then(() => toast.success('已复制方案 YAML'))
+    navigator.clipboard?.writeText(exportSchemeYaml(activeScheme)).then(() => showToast.success('已复制方案 YAML'))
   }
 
   function swatchPreview(s) {
@@ -915,9 +915,9 @@ export default function SkinStudio() {
   return (
     <SkinProvider>
       <InspectProvider>
-        {/* Toast.Provider 的 children 是 toast 条目渲染器，不能包住主界面 */}
-        <StudioBody />
-        <Toast.Provider placement="bottom-end" maxVisibleToasts={4} />
+        <ToastProvider>
+          <StudioBody />
+        </ToastProvider>
       </InspectProvider>
     </SkinProvider>
   )
