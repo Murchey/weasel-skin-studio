@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Button,
   Dropdown,
@@ -388,8 +388,8 @@ function StudioBody() {
                     </Radio>
             </RadioGroup>
             <span className="text-[11px] app-muted">
-              {state.style.inline_preedit ? '行内预编辑' : '独立候选窗'} ·{' '}
-              {layoutMode === 'h' ? '横排' : layoutMode === 'vt' ? '竖排文本' : '竖排'} ·{' '}
+              {state.style.inline_preedit ? '编码在输入框' : '编码在候选窗'} ·{' '}
+              {layoutMode === 'h' ? '候选横排' : layoutMode === 'vt' ? '竖排文字' : '候选竖排'} ·{' '}
               {state.style.font_point}pt
             </span>
             <div className="flex-1" />
@@ -439,7 +439,7 @@ function StudioBody() {
               </Button>
             </div>
             <div className="text-[10px] leading-relaxed app-muted">
-              保存 = 当前配色 + 字体/布局写入已打开的 weasel.yaml
+              保存 = 当前配色 + 显示方式 + 字体/布局 写入 weasel.yaml；文件里多余方案会删掉，只保留左侧列表。
             </div>
           </section>
 
@@ -497,47 +497,66 @@ function StudioBody() {
               </Tabs.Panel>
 
               <Tabs.Panel id="layout" className="pt-3">
-                <FormRow label="排列">
-                  <RadioGroup
-                    orientation="horizontal"
-                    value={layoutMode}
-                    onChange={(v) => {
-                      if (v === 'h') {
-                        store.setStyle('horizontal', true)
-                        store.setStyle('vertical_text', false)
-                      } else if (v === 'v') {
-                        store.setStyle('horizontal', false)
-                        store.setStyle('vertical_text', false)
-                      } else {
-                        store.setStyle('horizontal', false)
-                        store.setStyle('vertical_text', true)
-                      }
-                    }}
-                    size="sm"
-                    aria-label="排列"
-                  >
-                    <Radio value="h">
-                      <Radio.Content>横排</Radio.Content>
-                    </Radio>
-                    <Radio value="v">
-                      <Radio.Content>竖排</Radio.Content>
-                    </Radio>
-                    <Radio value="vt">
-                      <Radio.Content>竖排文本</Radio.Content>
-                    </Radio>
-                  </RadioGroup>
-                </FormRow>
-                <FormRow label="行内预编辑">
-                  <Switch
-                    isSelected={!!state.style.inline_preedit}
-                    onChange={(v) => store.setStyle('inline_preedit', v)}
-                    size="sm"
-                  >
-                    <Switch.Content>{state.style.inline_preedit ? '开启' : '关闭'}</Switch.Content>
-                  </Switch>
-                </FormRow>
+                <div className="mb-3 rounded-lg border border-(--app-border) bg-(--app-panel) p-2.5">
+                  <div className="mb-1 text-xs font-semibold">显示方式（影响打字手感）</div>
+                  <div className="mb-2 text-[10px] leading-relaxed app-muted">
+                    这两项决定「编码写在哪、候选怎么排」。改完点右上角保存后，需在小狼毫里重新部署生效。
+                  </div>
+
+                  <FormRow label="候选怎么排">
+                    <RadioGroup
+                      orientation="vertical"
+                      value={layoutMode}
+                      onChange={(v) => {
+                        if (v === 'h') {
+                          store.setStyle('horizontal', true)
+                          store.setStyle('vertical_text', false)
+                        } else if (v === 'v') {
+                          store.setStyle('horizontal', false)
+                          store.setStyle('vertical_text', false)
+                        } else {
+                          store.setStyle('horizontal', false)
+                          store.setStyle('vertical_text', true)
+                        }
+                      }}
+                      size="sm"
+                      aria-label="候选排列方向"
+                    >
+                      <Radio value="h">
+                        <Radio.Content>横着排（一行，推荐）</Radio.Content>
+                      </Radio>
+                      <Radio value="v">
+                        <Radio.Content>竖着排（一列）</Radio.Content>
+                      </Radio>
+                      <Radio value="vt">
+                        <Radio.Content>竖排文字</Radio.Content>
+                      </Radio>
+                    </RadioGroup>
+                  </FormRow>
+
+                  <FormRow label="编码字母显示在哪">
+                    <RadioGroup
+                      orientation="vertical"
+                      value={state.style.inline_preedit ? 'inline' : 'panel'}
+                      onChange={(v) => store.setStyle('inline_preedit', v === 'inline')}
+                      size="sm"
+                      aria-label="编码显示位置"
+                    >
+                      <Radio value="inline">
+                        <Radio.Content>输入框里（跟光标，推荐）</Radio.Content>
+                      </Radio>
+                      <Radio value="panel">
+                        <Radio.Content>候选窗里（独立预编辑）</Radio.Content>
+                      </Radio>
+                    </RadioGroup>
+                    <div className="mt-1 text-[10px] app-muted">
+                      选「输入框里」后，拼音字母会出现在你正在打字的地方，不会挤进皮肤窗口。
+                    </div>
+                  </FormRow>
+                </div>
+
                 <RangeRow
-                  label="边框"
+                  label="边框宽度"
                   value={state.style.layout.border_width}
                   min={0}
                   max={16}

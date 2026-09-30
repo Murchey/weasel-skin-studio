@@ -140,6 +140,47 @@ export function removeSchemeFromWeaselText(originalText, schemeId) {
   return { text: next.join('\n'), action: 'removed' }
 }
 
+/**
+ * 把 preset_color_schemes 同步为「只保留 keepIds」。
+ * 删除文件里存在但不在 keepIds 中的方案，避免删过的方案再次打开又出现。
+ * @param {string} originalText
+ * @param {string[]} keepIds 要保留的方案 id
+ * @returns {{ text: string, removed: string[] }}
+ */
+export function syncSchemeListInWeaselText(originalText, keepIds) {
+  const keep = new Set(keepIds)
+  const lines = originalText.split(/\r?\n/)
+  const preset = findTopLevelKeyRange(lines, 'preset_color_schemes')
+  if (!preset) return { text: originalText, removed: [] }
+
+  // 方案 id 是 preset_color_schemes 的直接子键（二级缩进）
+  const idRe = /^(\s+)([^\s#][^:]*?)\s*:/
+  const found = []
+  let baseIndent = null
+  for (let i = preset.start + 1; i < preset.end; i++) {
+    const line = lines[i]
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    const m = line.match(idRe)
+    if (!m) continue
+    const ind = m[1]
+    if (baseIndent === null) baseIndent = ind
+    if (ind !== baseIndent) continue
+    found.push(m[2].trim())
+  }
+
+  const removed = []
+  let text = originalText
+  // 从后往前删，避免行号漂移
+  for (const id of found.filter((id) => !keep.has(id)).reverse()) {
+    const ls = text.split(/\r?\n/)
+    const r = findSchemeRange(ls, id)
+    if (!r) continue
+    text = [...ls.slice(0, r.start), ...ls.slice(r.end)].join('\n')
+    removed.push(id)
+  }
+  return { text, removed }
+}
+
 /** 更新 style 段中的若干键（不重写整个 style，尽量保注释） */
 export function updateStyleKeysInWeaselText(originalText, patch) {
   const lines = originalText.split(/\r?\n/)

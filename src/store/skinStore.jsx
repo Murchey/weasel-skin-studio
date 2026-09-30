@@ -25,6 +25,7 @@ import {
 import {
   upsertSchemeInWeaselText,
   removeSchemeFromWeaselText,
+  syncSchemeListInWeaselText,
   updateStyleKeysInWeaselText,
 } from '../utils/weaselFileEdit.js'
 
@@ -411,10 +412,18 @@ export function SkinProvider({ children }) {
       throw new Error('请先「打开 weasel.yaml」')
     }
     const s = activeScheme
+    // 1) 写入当前配色（已存在则整块替换）
     let text = upsertSchemeInWeaselText(state.file.text, s).text
+    // 2) 把文件里的方案列表同步为「界面里还留着的那些」
+    //    —— 这样删除过的方案不会在重新打开后又冒出来
+    const keepIds = state.schemes.map((x) => x.id)
+    const synced = syncSchemeListInWeaselText(text, keepIds)
+    text = synced.text
+    // 3) 兜底：清理 pendingRemovals（通常已被第 2 步覆盖）
     for (const rid of state.pendingRemovals) {
       text = removeSchemeFromWeaselText(text, rid).text
     }
+    // 4) 写回与显示相关的 style 键（排列 / 预编辑位置 / 字号…）
     text = updateStyleKeysInWeaselText(text, {
       color_scheme: s.id,
       font_point: state.style.font_point,
@@ -422,12 +431,15 @@ export function SkinProvider({ children }) {
       comment_font_point: state.style.comment_font_point,
       horizontal: state.style.horizontal,
       vertical_text: state.style.vertical_text,
+      vertical_text_left_to_right: state.style.vertical_text_left_to_right,
+      vertical_text_with_wrap: state.style.vertical_text_with_wrap,
       inline_preedit: state.style.inline_preedit,
+      preedit_type: state.style.preedit_type,
       label_format: state.style.label_format,
       mark_text: state.style.mark_text,
     }).text
     return text
-  }, [state.file, activeScheme, state.style])
+  }, [state.file, state.schemes, state.pendingRemovals, activeScheme, state.style])
 
   const openWeaselFile = useCallback(async () => {
     const result = await readWeaselFile()
@@ -444,10 +456,14 @@ export function SkinProvider({ children }) {
           loaded: true,
           writable: !!result.handle,
           lastSavedAt: null,
-          lastAction: result.handle ? '已打开 · 可写' : '已打开 · 只读',
+          lastAction: result.handle
+            ? `已打开 · ${schemes.length} 个方案 · 可写`
+            : `已打开 · ${schemes.length} 个方案 · 只读`,
         },
         dirty: false,
         studioMode: true,
+        // 重新打开文件时丢弃未写入的删除记录，避免与文件内容错位
+        pendingRemovals: [],
       }
       if (schemes.length) {
         next.schemes = schemes
@@ -458,6 +474,12 @@ export function SkinProvider({ children }) {
         }
         const preferred = schemes.find((s) => s.id === parsed.style.color_scheme) || schemes[0]
         next.activeSchemeId = preferred.id
+      } else {
+        // 空文件：明确告知，不要静默塞入内置预设
+        next.file = {
+          ...next.file,
+          lastAction: '文件中没有配色方案，可从左侧预设添加',
+        }
       }
       return next
     })
