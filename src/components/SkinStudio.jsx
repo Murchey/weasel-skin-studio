@@ -915,9 +915,9 @@ export default function SkinStudio() {
   return (
     <SkinProvider>
       <InspectProvider>
-        <Toast.Provider placement="bottom-end" maxVisibleToasts={4}>
-          <StudioBody />
-        </Toast.Provider>
+        {/* Toast.Provider 的 children 是 toast 条目渲染器，不能包住主界面 */}
+        <StudioBody />
+        <Toast.Provider placement="bottom-end" maxVisibleToasts={4} />
       </InspectProvider>
     </SkinProvider>
   )
