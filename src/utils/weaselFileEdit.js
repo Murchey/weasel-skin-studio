@@ -245,12 +245,10 @@ function extractTrailingComment(line) {
 
 function formatYamlScalar(v) {
   if (typeof v === 'boolean') return v ? 'true' : 'false'
-  if (typeof v === 'number') return String(v)
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v)
   if (v == null) return '""'
-  const s = String(v)
-  if (s === '') return '""'
-  if (/^[\w.%/-]+$/.test(s) && !/^(true|false|null|yes|no|on|off)$/i.test(s)) return s
-  return JSON.stringify(s)
+  // 字符串一律加引号：避免 %s、*、#、: 等被 YAML 误解析
+  return JSON.stringify(String(v))
 }
 
 /** 设置 style.color_scheme 为当前方案 id */

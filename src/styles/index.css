@@ -166,3 +166,16 @@ body {
 .cand-row:not(.is-selected) {
   background: transparent;
 }
+
+
+/* DevTools-like inspect overlay on preview regions */
+.insp-hit {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.28) !important;
+}
+.insp-hit-soft {
+  outline: 2px dashed #3b82f6 !important;
+  outline-offset: 4px;
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}

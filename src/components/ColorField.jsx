@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Input, Tooltip, Slider, Button } from '@heroui/react'
 import { toCss, parseHexToRgba, rgbaToHex } from '../utils/color.js'
 import { useSkin } from '../store/skinStore.jsx'
+import { useInspect } from '../hooks/useInspect.jsx'
 
 export default function ColorField({ fieldKey, label, optional = false }) {
   const { getColor, setColor, weaselColor } = useSkin()
+  const { show, hide } = useInspect()
   const value = getColor(fieldKey)
 
   const hexFromStore = useMemo(() => (value ? rgbaToHex(value, true) : '#00000000'), [value])
@@ -47,9 +49,14 @@ export default function ColorField({ fieldKey, label, optional = false }) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-(--app-border) py-2 last:border-b-0">
+    <div
+      className="flex items-center gap-2 border-b border-(--app-border) py-2 last:border-b-0"
+      onMouseEnter={() => show(fieldKey)}
+      onMouseLeave={hide}
+      title="悬停可在预览中高亮该颜色作用区域"
+    >
       <div className="w-28 shrink-0">
-        <div className="text-xs font-medium">{label}</div>
+        <div className="cursor-help text-xs font-medium">{label}</div>
         <div className="mono text-[10px] app-muted">{weaselVal}</div>
       </div>
 

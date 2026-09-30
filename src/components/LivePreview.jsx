@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useSkin } from '../store/skinStore.jsx'
+import { useInspect, useInspectStyle } from '../hooks/useInspect.jsx'
 import { toCss } from '../utils/color.js'
 
 function ptToPx(pt, fallback = 14) {
@@ -18,9 +19,62 @@ function ptToPx(pt, fallback = 14) {
  */
 export default function LivePreview() {
   const { state, activeScheme, setSample } = useSkin()
+  const { inspect } = useInspect()
   const style = state.style
   const colors = activeScheme?.colors || {}
   const L = style.layout || {}
+
+  const WIN_KEYS = [
+    'border_width',
+    'corner_radius',
+    'margin_x',
+    'margin_y',
+    'shadow_radius',
+    'window',
+    'back_color',
+    'border_color',
+    'shadow_color',
+    'candidate_back_color',
+    'candidate_border_color',
+    'font_point',
+  ]
+  const inspHit = (keys) => {
+    if (!inspect) return false
+    return Array.isArray(keys) ? keys.includes(inspect) : keys === inspect
+  }
+  const inspStyle = (keys, soft = false) => {
+    if (!inspHit(keys)) return undefined
+    return {
+      outline: soft ? '2px dashed #3b82f6' : '2px solid #3b82f6',
+      outlineOffset: soft ? 3 : 1,
+      boxShadow: soft
+        ? '0 0 0 4px rgba(59,130,246,0.18)'
+        : '0 0 0 3px rgba(59,130,246,0.35)',
+      position: 'relative',
+      zIndex: 2,
+    }
+  }
+  const inspTag = (keys, label) =>
+    inspHit(keys) ? (
+      <span
+        style={{
+          position: 'absolute',
+          top: -10,
+          left: 8,
+          zIndex: 3,
+          background: '#3b82f6',
+          color: '#fff',
+          fontSize: 10,
+          lineHeight: '16px',
+          padding: '0 6px',
+          borderRadius: 4,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}
+      >
+        {label}
+      </span>
+    ) : null
 
   const isHorizontal = !!(style.horizontal && !style.vertical_text)
   const inlinePreedit = !!style.inline_preedit
@@ -33,25 +87,46 @@ export default function LivePreview() {
   const fontPx = ptToPx(style.font_point)
   const labelPx = ptToPx(style.label_font_point, 12)
   const commentPx = ptToPx(style.comment_font_point, 12)
-  const hiliteGap = L.hilite_spacing ?? 6
-  const hilitePad = L.hilite_padding ?? 0
-  const candGap = L.candidate_spacing ?? 12
+  // Weasel Layout.cpp / StandardLayout.cpp
+  // - hilite_spacing: mark/label/text/comment 间距
+  // - hilite_padding_x/y: 选中块 InflateRect（文字到高亮边缘）
+  // - candidate_spacing: 候选之间
+  // - real_margin = max(|margin|, hilite_padding)
+  const hiliteGap = L.hilite_spacing ?? 4
+  const hilitePadX = L.hilite_padding_x ?? L.hilite_padding ?? 2
+  const hilitePadY = L.hilite_padding_y ?? L.hilite_padding ?? 2
+  const candGap = L.candidate_spacing ?? 5
+  const realMarginX = Math.max(Math.abs(L.margin_x ?? 12), hilitePadX)
+  const realMarginY = Math.max(Math.abs(L.margin_y ?? 12), hilitePadY)
 
   const windowStyle = useMemo(() => {
     const border = css('border_color', 'rgba(196, 160, 0, 0.9)')
+    const shadowColor = css('shadow_color', 'transparent')
+    const borderW = Number(L.border_width ?? L.border ?? 3)
+    // Weasel: round_corner_ex = corner_radius || round_corner（窗体圆角）
+    const winRadius = L.corner_radius ?? L.round_corner ?? 4
+    const shadowR = Number(L.shadow_radius ?? 0)
+    const shadowX = Number(L.shadow_offset_x ?? 4)
+    const shadowY = Number(L.shadow_offset_y ?? 4)
+    // Weasel 仅在 shadow_radius!=0 且 shadow_color 非透明时画阴影
+    const showShadow =
+      shadowR > 0 && shadowColor && shadowColor !== 'transparent'
+
     return {
       background: css('back_color', 'rgba(28, 28, 28, 0.96)'),
-      border: `${L.border_width || 1}px solid ${border}`,
-      borderRadius: `${L.corner_radius || 10}px`,
-      boxShadow:
-        (L.shadow_radius || 0) > 0
-          ? `0 ${L.shadow_offset_y ?? 4}px ${(L.shadow_radius || 6) * 2}px rgba(0,0,0,0.28)`
-          : '0 10px 28px rgba(0,0,0,0.22)',
-      padding: 0,
+      // border_width=0 必须用 ?? / Number，|| 会把 0 当未设置
+      border: borderW <= 0 ? 'none' : `${borderW}px solid ${border}`,
+      borderRadius: `${winRadius}px`,
+      boxShadow: showShadow
+        ? `${shadowX}px ${shadowY}px ${shadowR * 2}px ${shadowColor}`
+        : 'none',
+      // Weasel Layout.cpp: real_margin 在窗体内侧（内容相对边框内缩）
+      // real_margin = max(|margin|, hilite_padding)
+      padding: `${realMarginY}px ${realMarginX}px`,
       color: css('text_color', '#ddd'),
       fontFamily: style.font_face || 'Segoe UI, Microsoft YaHei, sans-serif',
     }
-  }, [colors, L, style.font_face])
+  }, [colors, L, style.font_face, realMarginX, realMarginY])
 
   const preeditColor = css('text_color', '#ddd')
   const preeditHiliteColor = css('hilited_text_color', '#fff')
@@ -72,7 +147,7 @@ export default function LivePreview() {
         alignContent: 'stretch',
         gap: `${candGap}px`,
         width: '100%',
-        minHeight: `${Math.round(fontPx * 1.7 + hilitePad * 2)}px`,
+        minHeight: `${Math.round(fontPx * 1.7 + hilitePadY * 2)}px`,
       }
     : {
         display: 'flex',
@@ -143,14 +218,21 @@ export default function LivePreview() {
       )}
 
       {/* 候选窗 */}
-      <div style={windowStyle}>
+      <div
+        style={{ ...windowStyle, ...inspStyle(WIN_KEYS, true), position: 'relative' }}
+      >
+        {inspTag(WIN_KEYS, '窗口 / 边距 / 边框 / 阴影')}
         {/*
           inline_preedit = false：编码显示在候选窗内（用户反馈的「字母跑进输入法」）
         */}
-        {!inlinePreedit && (
+        {(!inlinePreedit || inspHit(['text_color', 'hilited_text_color', 'hilited_back_color', 'hilited_shadow_color', 'preedit'])) && (
           <div
-            className="px-2 pt-2 pb-1"
             style={{
+              ...inspStyle(
+                ['text_color', 'hilited_text_color', 'hilited_back_color', 'hilited_shadow_color', 'preedit'],
+                true,
+              ),
+              position: 'relative',
               color: preeditColor,
               fontSize: fontPx,
               lineHeight: 1.45,
@@ -158,6 +240,7 @@ export default function LivePreview() {
               borderBottom: `1px solid ${css('border_color', 'rgba(255,255,255,0.08)')}`,
             }}
           >
+            {inspTag(['text_color', 'hilited_text_color', 'hilited_back_color', 'preedit'], '编码 / 预编辑')}
             {preeditNode}
             {caretNode}
             <span
@@ -169,7 +252,10 @@ export default function LivePreview() {
           </div>
         )}
 
-        <div style={listStyle} className={!inlinePreedit ? 'p-0' : undefined}>
+        <div
+          style={{ ...listStyle, ...inspStyle(['candidate_spacing'], true), position: 'relative' }}
+        >
+          {inspTag(['candidate_spacing'], '候选间距')}
           {state.sampleCandidates.map((c, i) => {
             const selected = i === state.selectedCandidate
             const bg = selected
@@ -200,8 +286,44 @@ export default function LivePreview() {
                   alignSelf: 'stretch',
                   height: '100%',
                   minHeight: `${Math.round(fontPx * 1.7)}px`,
-                  padding: `0 ${hilitePad}px`,
-                  borderRadius: `${L.round_corner || 6}px`,
+                  padding: `${hilitePadY}px ${hilitePadX}px`,
+                  borderRadius: `${L.round_corner ?? L.corner_radius ?? 4}px`,
+                  position: 'relative',
+                  ...(selected
+                    ? inspStyle(
+                        [
+                          'round_corner',
+                          'hilite_padding',
+                          'hilite_padding_x',
+                          'hilite_padding_y',
+                          'hilited_candidate_back_color',
+                          'hilited_candidate_text_color',
+                          'hilited_candidate_border_color',
+                          'hilited_candidate_shadow_color',
+                          'hilited_candidate_label_color',
+                          'hilited_label_color',
+                          'hilited_comment_text_color',
+                          'hilited_mark_color',
+                          'label_font_point',
+                          'comment_font_point',
+                        ],
+                        false,
+                      )
+                    : inspStyle(
+                        [
+                          'hilite_spacing',
+                          'label_color',
+                          'candidate_text_color',
+                          'candidate_back_color',
+                          'candidate_border_color',
+                          'candidate_shadow_color',
+                          'comment_text_color',
+                          'label_format',
+                          'label_font_point',
+                          'comment_font_point',
+                        ],
+                        true,
+                      )),
                   background: bg,
                   color: fg,
                   border:
@@ -214,6 +336,18 @@ export default function LivePreview() {
                   boxSizing: 'border-box',
                 }}
               >
+                {selected
+                  ? inspTag(
+                      [
+                        'round_corner',
+                        'hilite_padding',
+                        'hilited_candidate_back_color',
+                        'hilited_candidate_text_color',
+                        'hilited_label_color',
+                      ],
+                      '选中高亮',
+                    )
+                  : inspTag(['label_color', 'candidate_text_color', 'comment_text_color'], '候选标签/文字')}
                 {markVisible && selected && (
                   <span
                     style={{
@@ -255,7 +389,11 @@ export default function LivePreview() {
         {(colors.prevpage_color || colors.nextpage_color) && (
           <div
             className="mt-1.5 flex items-center justify-end gap-2 px-2 pb-1.5"
-            style={{ fontSize: Math.max(10, fontPx - 3) }}
+            style={{
+              fontSize: Math.max(10, fontPx - 3),
+              position: 'relative',
+              ...inspStyle(['prevpage_color', 'nextpage_color'], true),
+            }}
           >
             <span style={{ color: css('prevpage_color', css('text_color')) }}>◀</span>
             <span style={{ color: css('nextpage_color', css('text_color')) }}>▶</span>

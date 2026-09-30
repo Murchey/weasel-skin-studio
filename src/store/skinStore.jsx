@@ -10,6 +10,7 @@ import {
   STYLE_DEFAULTS,
   normalizeScheme,
   exportFullYaml,
+  exportCustomPatchYaml,
   exportSchemeYaml,
   exportStyleYaml,
   migrateSchemeFormat,
@@ -47,8 +48,9 @@ const initialFile = () => ({
 function initialState() {
   return {
     style: clone(STYLE_DEFAULTS),
-    schemes: clone(PRESET_SCHEMES),
-    activeSchemeId: 'custom',
+    // 启动不塞预设：由用户点预设或打开文件后再填充
+    schemes: [],
+    activeSchemeId: '',
     dirty: false,
     stageMode: 'light',
     sampleText: 'xiao lang hao shu ru fa',
@@ -456,9 +458,11 @@ export function SkinProvider({ children }) {
           loaded: true,
           writable: !!result.handle,
           lastSavedAt: null,
-          lastAction: result.handle
-            ? `已打开 · ${schemes.length} 个方案 · 可写`
-            : `已打开 · ${schemes.length} 个方案 · 只读`,
+          lastAction: schemes.length
+            ? (result.handle
+                ? `已打开 · ${schemes.length} 个方案 · 可写`
+                : `已打开 · ${schemes.length} 个方案 · 只读`)
+            : `已打开 · 文件内无配色方案 · 可点左侧「预设」添加`,
         },
         dirty: false,
         studioMode: true,
@@ -584,32 +588,129 @@ export function SkinProvider({ children }) {
     }))
   }, [exportAll])
 
+  const buildCustomPatch = useCallback(() => {
+    return exportCustomPatchYaml(state.style, state.schemes, {
+      removeIds: state.pendingRemovals,
+    })
+  }, [state.style, state.schemes, state.pendingRemovals])
+
   /**
-   * 保存入口：
-   * - 已打开 weasel.yaml 且可写 → 写回源文件（含删除 pendingRemovals）
-   * - 否则 → 另存/下载当前方案 YAML
+   * 按 Rime 定製指南：默认写 weasel.custom.yaml 补丁，不直接改 weasel.yaml。
+   * - 若已打开 weasel.custom.yaml → 写回该文件
+   * - 若已打开同目录 weasel.yaml → 尝试写同目录 weasel.custom.yaml
+   * - 否则另存为 weasel.custom.yaml
    */
-  const saveSchemes = useCallback(async () => {
-    if (state.file.loaded && state.file.text && canWriteFile()) {
-      return saveToWeaselFile()
+  const saveCustomPatch = useCallback(async () => {
+    const text = buildCustomPatch()
+    let targetName = 'weasel.custom.yaml'
+    let path = null
+
+    if (state.file.loaded && state.file.path) {
+      const p = String(state.file.path)
+      if (/weasel\.custom\.ya?ml$/i.test(p)) {
+        path = p
+      } else if (/weasel\.ya?ml$/i.test(p)) {
+        path = p.replace(/weasel\.ya?ml$/i, 'weasel.custom.yaml')
+      }
     }
-    const ok = await downloadWeaselFile('weasel-skin.yaml', exportAll())
+
+    const tauriPathWrite = typeof state.file.handle === 'string'
+    if (path && tauriPathWrite) {
+      // 用路径直接写（Tauri handle 是 path 字符串）
+      const handle = typeof state.file.handle === 'string' && /weasel\.custom\.ya?ml$/i.test(state.file.handle)
+        ? state.file.handle
+        : path
+      await writeWeaselFile(path, text)
+      setState((prev) => ({
+        ...prev,
+        file: {
+          ...prev.file,
+          lastAction: '已写入 weasel.custom.yaml 补丁',
+          lastSavedAt: new Date().toISOString(),
+        },
+        pendingRemovals: [],
+        dirty: false,
+      }))
+      return { ok: true, written: true, needsDownload: false, patched: true, path }
+    }
+
+    const ok = await downloadWeaselFile(targetName, text)
     setState((prev) => ({
       ...prev,
       file: {
         ...prev.file,
-        lastAction: ok ? '已另存 weasel-skin.yaml' : '已取消另存',
+        lastAction: ok ? '已导出 weasel.custom.yaml' : '已取消导出',
       },
-      pendingRemovals: [],
     }))
-    return {
-      ok: !!ok,
-      written: !!ok,
-      needsDownload: false,
-      exported: true,
-      schemeId: activeScheme?.id,
+    return { ok: !!ok, written: false, needsDownload: !ok, exported: true, patched: true }
+  }, [buildCustomPatch, state.file, canWriteFile])
+
+  /** 覆盖当前已打开的源文件 */
+  const overwriteSource = useCallback(async () => {
+    if (!state.file.loaded || !state.file.text) {
+      throw new Error('尚未打开源文件，无法覆盖')
     }
-  }, [state.file, canWriteFile, saveToWeaselFile, exportAll, activeScheme])
+    const path = String(state.file.path || state.file.name || '')
+    const isCustom = /weasel\.custom\.ya?ml$/i.test(path) ||
+      /^\s*patch\s*:/m.test(state.file.text || '')
+
+    if (isCustom) {
+      // weasel.custom.yaml：整份重写为 patch（Rime 定製指南）
+      const text = buildCustomPatch()
+      if (!canWriteFile()) {
+        throw new Error('当前文件只读，无法覆盖')
+      }
+      await writeWeaselFile(state.file.handle, text)
+      setState((prev) => ({
+        ...prev,
+        file: {
+          ...prev.file,
+          text,
+          lastSavedAt: new Date().toISOString(),
+          lastAction: '已覆盖 weasel.custom.yaml',
+        },
+        dirty: false,
+        pendingRemovals: [],
+      }))
+      return { ok: true, written: true, needsDownload: false, patched: true }
+    }
+
+    return saveToWeaselFile()
+  }, [state.file, saveToWeaselFile, buildCustomPatch, canWriteFile])
+
+  /** 另存为：写完整 YAML 或补丁到用户指定位置 */
+  const saveAsFile = useCallback(async (kind = 'patch') => {
+    const text =
+      kind === 'full' ? exportAll() : buildCustomPatch()
+    const defaultName =
+      kind === 'full' ? 'weasel-skin.yaml' : 'weasel.custom.yaml'
+    const ok = await downloadWeaselFile(defaultName, text)
+    setState((prev) => ({
+      ...prev,
+      file: {
+        ...prev.file,
+        lastAction: ok ? `已另存 ${defaultName}` : '已取消另存',
+      },
+    }))
+    return { ok: !!ok, written: false, exported: true, savedAs: ok ? defaultName : null }
+  }, [exportAll, buildCustomPatch])
+
+  /** 兼容：优先补丁，失败/无路径再导出片段 */
+  const saveSchemes = useCallback(async () => {
+    try {
+      return await saveCustomPatch()
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e)
+      if (String(msg).includes('YAML')) throw e
+      const ok = await downloadWeaselFile('weasel-skin.yaml', exportAll())
+      return {
+        ok: !!ok,
+        written: false,
+        exported: true,
+        schemeId: activeScheme?.id,
+      }
+    }
+  }, [saveCustomPatch, exportAll, activeScheme])
 
   const value = useMemo(
     () => ({
@@ -645,6 +746,10 @@ export function SkinProvider({ children }) {
       removeSchemeFromFile,
       exportWeaselCopy,
       exportSkinYaml,
+      saveCustomPatch,
+      buildCustomPatch,
+      overwriteSource,
+      saveAsFile,
       saveSchemes,
       canWriteFile,
       fileStatus,
@@ -682,6 +787,10 @@ export function SkinProvider({ children }) {
       removeSchemeFromFile,
       exportWeaselCopy,
       exportSkinYaml,
+      saveCustomPatch,
+      buildCustomPatch,
+      overwriteSource,
+      saveAsFile,
       saveSchemes,
       canWriteFile,
       fileStatus,

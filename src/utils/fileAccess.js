@@ -77,6 +77,8 @@ export async function openWeaselFileDialog() {
 /** 写入已绑定的 weasel 文件 */
 export async function writeWeaselFile(handle, text) {
   if (handle == null) throw new Error('无写入句柄，请重新打开文件')
+  const check = await validateYamlText(text)
+  if (!check.ok) throw new Error(check.error)
 
   if (isTauri() && typeof handle === 'string') {
     const { fs } = await tauriDeps()
@@ -129,3 +131,19 @@ export const WEASEL_PATH_HINTS = [
     hint: '%APPDATA%\\Rime\\weasel.yaml',
   },
 ]
+
+/** 写入前校验 YAML，避免把坏配置写进 weasel.yaml 导致设定页打不开 */
+export async function validateYamlText(text) {
+  const yaml = await import('js-yaml')
+  try {
+    yaml.load(text)
+    return { ok: true }
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e)
+    const mark = e && e.mark ? ` (line ${e.mark.line + 1}, col ${e.mark.column + 1})` : ''
+    return {
+      ok: false,
+      error: `YAML 无效${mark}：${msg}\n这样写入后「输入法设定」的皮肤页可能打不开，已阻止保存。`,
+    }
+  }
+}

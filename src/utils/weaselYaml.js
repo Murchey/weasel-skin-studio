@@ -38,54 +38,63 @@ export const COLOR_GROUPS = {
 }
 
 export const STYLE_DEFAULTS = {
-  color_scheme: 'custom',
+  color_scheme: 'aqua',
   color_scheme_dark: '',
-  font_face: 'Microsoft YaHei, Segoe UI, sans-serif',
+  font_face: 'Microsoft YaHei',
   label_font_face: 'Microsoft YaHei',
   comment_font_face: 'Microsoft YaHei',
   font_point: 14,
   label_font_point: 14,
-  comment_font_point: 13,
-  inline_preedit: true,
+  comment_font_point: 14,
+  // 官方 weasel.yaml 默认
+  inline_preedit: false,
   preedit_type: 'composition',
   fullscreen: false,
-  horizontal: true,
+  horizontal: false,
   vertical_text: false,
   vertical_text_left_to_right: false,
   vertical_text_with_wrap: false,
   vertical_auto_reverse: false,
-  label_format: '%s',
+  label_format: '%s.',
   mark_text: '',
   hover_type: 'none',
-  paging_on_scroll: true,
-  candidate_abbreviate_length: 30,
+  paging_on_scroll: false,
+  candidate_abbreviate_length: 0,
   antialias_mode: 'default',
   layout: {
     baseline: 0,
     linespacing: 0,
     align_type: 'center',
-    max_height: 600,
+    max_height: 0,
     max_width: 0,
     min_height: 0,
-    min_width: 10,
-    border_width: 2,
-    margin_x: 8,
-    margin_y: 8,
-    spacing: 13,
-    candidate_spacing: 22,
-    hilite_spacing: 6,
-    hilite_padding: 8,
+    min_width: 160,
+    border_width: 3,
+    margin_x: 12,
+    margin_y: 12,
+    spacing: 10,
+    candidate_spacing: 5,
+    hilite_spacing: 4,
+    // Weasel: hilite_padding_x/y 可拆分，默认 hilite_padding
+    hilite_padding: 2,
     shadow_radius: 0,
     shadow_offset_x: 4,
     shadow_offset_y: 4,
-    corner_radius: 8,
-    round_corner: 8,
+    corner_radius: 4,
+    round_corner: 4,
   },
 }
 
 /** 从 weasel.yaml 文本提取 style + preset_color_schemes */
 export function parseWeaselYaml(text) {
-  const doc = yaml.load(text)
+  let doc
+  try {
+    doc = yaml.load(text)
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e)
+    const mark = e && e.mark ? ` (line ${e.mark.line + 1}, col ${e.mark.column + 1})` : ''
+    throw new Error(`YAML 解析失败${mark}：${msg}\n请检查缩进是否对齐、值里的 * # % : 是否已加引号`)
+  }
   if (!doc || typeof doc !== 'object') {
     throw new Error('无法解析 YAML')
   }
@@ -99,6 +108,44 @@ export function parseWeaselYaml(text) {
     if (!raw || typeof raw !== 'object') continue
     presets[id] = normalizeScheme(id, raw)
   }
+
+  // weasel.custom.yaml：patch/"style/..." / "preset_color_schemes/id"
+  const patch = doc.patch && typeof doc.patch === 'object' ? doc.patch : null
+  if (patch) {
+    for (const [k, v] of Object.entries(patch)) {
+      if (k.startsWith('preset_color_schemes/')) {
+        const id = k.slice('preset_color_schemes/'.length)
+        if (v && typeof v === 'object') {
+          presets[id] = normalizeScheme(id, v)
+        }
+        continue
+      }
+      if (k.startsWith('style/')) {
+        const path = k.slice('style/'.length)
+        if (path.includes('/')) {
+          const [a, b] = path.split('/')
+          if (!style[a] || typeof style[a] !== 'object') style[a] = {}
+          style[a][b] = v
+        } else {
+          style[path] = v
+        }
+        continue
+      }
+      // 嵌套：preset_color_schemes: { id: {...} }
+      if (k === 'preset_color_schemes' && v && typeof v === 'object') {
+        for (const [id, raw] of Object.entries(v)) {
+          if (raw && typeof raw === 'object') {
+            presets[id] = normalizeScheme(id, raw)
+          }
+        }
+      }
+      if (k === 'style' && v && typeof v === 'object') {
+        Object.assign(style, v)
+        if (v.layout) style.layout = { ...STYLE_DEFAULTS.layout, ...v.layout }
+      }
+    }
+  }
+
   return { style, presets, rawDoc: doc }
 }
 
@@ -141,7 +188,7 @@ export function exportSchemeYaml(scheme) {
 export function exportStyleYaml(style) {
   const lines = []
   lines.push('style:')
-  lines.push(`  color_scheme: ${style.color_scheme || 'custom'}`)
+  lines.push(`  color_scheme: ${JSON.stringify(style.color_scheme || 'custom')}`)
   if (style.color_scheme_dark) {
     lines.push(`  color_scheme_dark: ${style.color_scheme_dark}`)
   }
@@ -152,7 +199,7 @@ export function exportStyleYaml(style) {
   lines.push(`  label_font_point: ${style.label_font_point}`)
   lines.push(`  comment_font_point: ${style.comment_font_point}`)
   lines.push(`  inline_preedit: ${!!style.inline_preedit}`)
-  lines.push(`  preedit_type: ${style.preedit_type || 'composition'}`)
+  lines.push(`  preedit_type: ${JSON.stringify(style.preedit_type || 'composition')}`)
   lines.push(`  fullscreen: ${!!style.fullscreen}`)
   lines.push(`  horizontal: ${!!style.horizontal}`)
   lines.push(`  vertical_text: ${!!style.vertical_text}`)
@@ -161,10 +208,10 @@ export function exportStyleYaml(style) {
   lines.push(`  vertical_auto_reverse: ${!!style.vertical_auto_reverse}`)
   lines.push(`  label_format: ${JSON.stringify(style.label_format || '%s')}`)
   lines.push(`  mark_text: ${JSON.stringify(style.mark_text || '')}`)
-  lines.push(`  hover_type: ${style.hover_type || 'none'}`)
+  lines.push(`  hover_type: ${JSON.stringify(style.hover_type || 'none')}`)
   lines.push(`  paging_on_scroll: ${!!style.paging_on_scroll}`)
   lines.push(`  candidate_abbreviate_length: ${style.candidate_abbreviate_length ?? 30}`)
-  lines.push(`  antialias_mode: ${style.antialias_mode || 'default'}`)
+  lines.push(`  antialias_mode: ${JSON.stringify(style.antialias_mode || 'default')}`)
   lines.push('  layout:')
   const L = style.layout || {}
   for (const [k, v] of Object.entries(L)) {
@@ -206,3 +253,130 @@ export function migrateSchemeFormat(scheme, toFormat) {
 }
 
 export { convertFormat }
+
+
+/**
+ * 生成 weasel.custom.yaml 补丁（Rime 定製指南推荐方式）
+ * 不要直接改 weasel.yaml；用 patch 覆盖 style 与 preset_color_schemes
+ *
+ * 结构：
+ *   patch:
+ *     style/color_scheme: "xxx"
+ *     style/font_point: 14
+ *     style/layout/margin_x: 12
+ *     preset_color_schemes/xxx:
+ *       name: "..."
+ *       ...
+ */
+export function exportCustomPatchYaml(style, schemes, options = {}) {
+  const removeIds = options.removeIds || []
+  const lines = []
+  lines.push('# 由 Weasel Skin Studio 生成 · weasel.custom.yaml 补丁')
+  lines.push('# 依据 Rime 定製指南：用 patch 覆盖，不要直接改 weasel.yaml')
+  lines.push('# 改完请「重新部署」使生效')
+  lines.push('')
+  lines.push('patch:')
+  lines.push(`  "style/color_scheme": ${JSON.stringify(String(style.color_scheme || (schemes[0] && schemes[0].id) || 'custom'))}`)
+
+  const styleKeys = [
+    'color_scheme_dark',
+    'font_face',
+    'label_font_face',
+    'comment_font_face',
+    'font_point',
+    'label_font_point',
+    'comment_font_point',
+    'inline_preedit',
+    'preedit_type',
+    'fullscreen',
+    'horizontal',
+    'vertical_text',
+    'vertical_text_left_to_right',
+    'vertical_text_with_wrap',
+    'vertical_auto_reverse',
+    'label_format',
+    'mark_text',
+    'hover_type',
+    'paging_on_scroll',
+    'candidate_abbreviate_length',
+    'antialias_mode',
+  ]
+  for (const k of styleKeys) {
+    const v = style[k]
+    if (v == null || v === '') continue
+    if (k === 'color_scheme') continue
+    const yamlVal =
+      typeof v === 'boolean' ? (v ? 'true' : 'false')
+        : typeof v === 'number' ? String(v)
+          : JSON.stringify(String(v))
+    lines.push(`  "style/${k}": ${yamlVal}`)
+  }
+
+  const L = style.layout || {}
+  for (const [k, v] of Object.entries(L)) {
+    if (v == null || v === '') continue
+    const yamlVal =
+      typeof v === 'boolean' ? (v ? 'true' : 'false')
+        : typeof v === 'number' ? String(v)
+          : JSON.stringify(String(v))
+    lines.push(`  "style/layout/${k}": ${yamlVal}`)
+  }
+
+  for (const scheme of schemes) {
+    if (!scheme || !scheme.id) continue
+    lines.push('')
+    lines.push(`  "preset_color_schemes/${scheme.id}":`)
+    const format = scheme.color_format || 'abgr'
+    const inner = '    '
+    lines.push(`${inner}name: ${JSON.stringify(String(scheme.name || scheme.id))}`)
+    if (scheme.author) lines.push(`${inner}author: ${JSON.stringify(String(scheme.author))}`)
+    lines.push(`${inner}color_format: ${format}`)
+    for (const field of COLOR_FIELDS) {
+      const rgba = scheme.colors && scheme.colors[field.key]
+      if (!rgba) continue
+      const val = formatWeaselColor(rgba, format)
+      lines.push(`${inner}${field.key}: ${val}`)
+    }
+  }
+
+  // 定製指南：补丁无法直接“删键”，删除用 __set/_remove 约定因版本而异，
+  // 这里用列表记录待删 id，配合工具内「从文件删除」或手工从 weasel.yaml 去掉。
+  if (removeIds && removeIds.length) {
+    lines.push('')
+    lines.push('  # 以下方案需从 weasel.yaml / 旧补丁中手工移除（补丁无法删除已有键）：')
+    for (const id of removeIds) {
+      lines.push(`  # - ${id}`)
+    }
+  }
+
+  return lines.join('\n') + '\n'
+}
+
+/** 解析 weasel.custom.yaml 中我们生成的 patch（尽力读取） */
+export function parseCustomPatch(text) {
+  const doc = yaml.load(text)
+  if (!doc || typeof doc !== 'object') return { schemes: [], style: {} }
+  const patch = doc.patch && typeof doc.patch === 'object' ? doc.patch : doc
+  const schemes = []
+  const style = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (k.startsWith('style/')) {
+      const path = k.slice('style/'.length)
+      if (path.includes('/')) {
+        const [a, b] = path.split('/')
+        if (!style[a] || typeof style[a] !== 'object') style[a] = {}
+        style[a][b] = v
+      } else {
+        style[path] = v
+      }
+      continue
+    }
+    if (k.startsWith('preset_color_schemes/')) {
+      const id = k.slice('preset_color_schemes/'.length)
+      if (v && typeof v === 'object') {
+        schemes.push(normalizeScheme(id, v))
+      }
+    }
+  }
+  return { schemes, style }
+}
