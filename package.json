@@ -1,7 +1,7 @@
 {
   "name": "weasel-skin-studio",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "node run-tauri.cjs",
     "tauri:dev": "node run-tauri.cjs dev",
-    "tauri:build": "node run-tauri.cjs build"
+    "tauri:build": "node run-tauri.cjs build",
+    "sync-version": "node scripts/sync-version.mjs",
+    "pretauri:build": "node scripts/sync-version.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.6",
