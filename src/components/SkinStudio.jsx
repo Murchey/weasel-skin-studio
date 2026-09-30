@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from '@heroui/react'
 import { Radio } from '@heroui/react'
+import appIcon from '../assets/app-icon.svg'
 import ColorField from './ColorField.jsx'
 import LivePreview from './LivePreview.jsx'
 import { SkinProvider, useSkin } from '../store/skinStore.jsx'
@@ -293,9 +294,13 @@ function StudioBody() {
     <div className="app-shell flex h-full min-h-0 flex-col">
       <header className="app-panel flex h-12 shrink-0 items-center gap-3 border-b px-3">
         <div className="flex items-center gap-2.5">
-          <div className="brand-mark flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold">
-            W
-          </div>
+          <img
+            src={appIcon}
+            alt="Weasel Skin Studio"
+            className="h-7 w-7 rounded-lg object-cover"
+            width={28}
+            height={28}
+          />
           <div>
             <div className="text-sm font-semibold">Weasel Skin Studio</div>
             <div className="text-[11px] app-muted">
