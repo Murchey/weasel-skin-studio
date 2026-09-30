@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Dropdown,
@@ -16,6 +16,7 @@ import { SkinProvider, useSkin } from '../store/skinStore.jsx'
 import { useThemeMode } from '../hooks/useThemeMode.js'
 import { InspectProvider, InspectLabel, useInspect } from '../hooks/useInspect.jsx'
 import { ToastProvider, useToast } from '../hooks/useToast.jsx'
+import { useUnsavedExitGuard } from '../hooks/useUnsavedExitGuard.js'
 import { usePanelWidth, PanelResizer } from '../hooks/usePanelWidth.jsx'
 import { COLOR_FIELDS, COLOR_GROUPS } from '../utils/weaselYaml.js'
 import { PRESET_SCHEMES } from '../data/presets.js'
@@ -128,6 +129,7 @@ function StudioBody() {
   const { state, activeScheme, colorFormat } = store
   const { theme, toggle } = useThemeMode()
   const showToast = useToast()
+  useUnsavedExitGuard()
   const leftPanel = usePanelWidth('wss-panel-left', 'left', 240)
   const rightPanel = usePanelWidth('wss-panel-right', 'right', 320)
   const [rightTab, setRightTab] = useState('color')
@@ -137,6 +139,22 @@ function StudioBody() {
   const [confirmAction, setConfirmAction] = useState(null)
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
+
+  // Ctrl/Cmd+Z 撤销上一步（输入框内不拦截）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return
+      const el = e.target
+      const tag = el && el.tagName ? String(el.tagName).toUpperCase() : ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return
+      e.preventDefault()
+      const ok = store.undo()
+      if (ok) showToast.info('已撤销上一步', { title: '撤销' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [store, showToast])
+
 
   const groupedFields = useMemo(() => {
     const map = { window: [], preedit: [], candidate: [], comment: [], hilited: [], paging: [] }

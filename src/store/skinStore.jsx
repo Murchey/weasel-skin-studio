@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { PRESET_SCHEMES } from '../data/presets.js'
@@ -74,6 +75,41 @@ const SkinContext = createContext(null)
 export function SkinProvider({ children }) {
   const [state, setState] = useState(initialState)
 
+  const historyRef = useRef([])
+  const stateRef = useRef(null)
+  stateRef.current = state
+
+  /** 保存可撤销快照（样式/配色，不含视图态） */
+  const pushHistory = useCallback(() => {
+    const s = stateRef.current
+    if (!s) return
+    historyRef.current.push({
+      style: clone(s.style),
+      schemes: clone(s.schemes),
+      activeSchemeId: s.activeSchemeId,
+      pendingRemovals: [...(s.pendingRemovals || [])],
+    })
+    if (historyRef.current.length > 80) historyRef.current.shift()
+  }, [])
+
+  const undo = useCallback(() => {
+    const snap = historyRef.current.pop()
+    if (!snap) return false
+    setState((prev) => ({
+      ...prev,
+      style: snap.style,
+      schemes: snap.schemes,
+      activeSchemeId: snap.activeSchemeId,
+      pendingRemovals: snap.pendingRemovals,
+      dirty: true,
+    }))
+    return true
+  }, [])
+
+  const clearHistory = useCallback(() => {
+    historyRef.current = []
+  }, [])
+
   const patch = useCallback((updater) => {
     setState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater }
@@ -91,6 +127,7 @@ export function SkinProvider({ children }) {
 
   const setColor = useCallback(
     (key, rgba) => {
+      pushHistory()
       patch((prev) => {
         const schemes = prev.schemes.map((s) => {
           if (s.id !== prev.activeSchemeId) return s
@@ -142,6 +179,7 @@ export function SkinProvider({ children }) {
 
   const setSchemeMeta = useCallback(
     (metaPatch) => {
+      pushHistory()
       patch((prev) => {
         let activeSchemeId = prev.activeSchemeId
         let style = prev.style
@@ -164,6 +202,7 @@ export function SkinProvider({ children }) {
 
   const setColorFormat = useCallback(
     (format) => {
+      pushHistory()
       patch((prev) => {
         const schemes = prev.schemes.map((s) => {
           if (s.id !== prev.activeSchemeId || s.color_format === format) return s
@@ -178,6 +217,7 @@ export function SkinProvider({ children }) {
 
   const applyPreset = useCallback(
     (preset) => {
+      pushHistory()
       patch((prev) => {
         const copy = clone(preset)
         copy.source = copy.source || 'preset'
@@ -200,6 +240,7 @@ export function SkinProvider({ children }) {
 
   const addScheme = useCallback(
     (fromScheme) => {
+      pushHistory()
       const id = `custom_${Date.now().toString(36)}`
       patch((prev) => {
         const base = fromScheme || prev.schemes.find((s) => s.id === prev.activeSchemeId) || PRESET_SCHEMES[0]
@@ -223,6 +264,7 @@ export function SkinProvider({ children }) {
 
   const removeScheme = useCallback(
     (id) => {
+      pushHistory()
       let ok = false
       patch((prev) => {
         if (prev.schemes.length <= 1) return prev
@@ -270,6 +312,7 @@ export function SkinProvider({ children }) {
   /** 批量删除（列表 + 记入待从文件删除） */
   const removeSchemes = useCallback(
     (ids) => {
+      pushHistory()
       const list = Array.isArray(ids) ? ids : [ids]
       patch((prev) => {
         const idSet = new Set(list)
@@ -303,6 +346,7 @@ export function SkinProvider({ children }) {
 
   const duplicateScheme = useCallback(
     (id) => {
+      pushHistory()
       patch((prev) => {
         const src = prev.schemes.find((s) => s.id === id)
         if (!src) return prev
@@ -323,6 +367,7 @@ export function SkinProvider({ children }) {
 
   const setStyle = useCallback(
     (key, value) => {
+      pushHistory()
       patch((prev) => ({
         ...prev,
         style: { ...prev.style, [key]: value },
@@ -334,6 +379,7 @@ export function SkinProvider({ children }) {
 
   const setLayout = useCallback(
     (key, value) => {
+      pushHistory()
       patch((prev) => ({
         ...prev,
         style: {
@@ -723,6 +769,8 @@ export function SkinProvider({ children }) {
       weaselColor,
       selectScheme,
       setSchemeMeta,
+      undo,
+      clearHistory,
       setColorFormat,
       applyPreset,
       addScheme,
@@ -764,6 +812,8 @@ export function SkinProvider({ children }) {
       weaselColor,
       selectScheme,
       setSchemeMeta,
+      undo,
+      clearHistory,
       setColorFormat,
       applyPreset,
       addScheme,
