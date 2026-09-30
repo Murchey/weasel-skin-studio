@@ -6,9 +6,9 @@ function isTauri() {
 }
 
 /**
- * 退出前检查未保存方案：
- * - Tauri：窗口关闭请求时确认
- * - 浏览器：beforeunload
+ * 退出前检查未保存方案
+ * - 无未保存：直接关闭
+ * - 有未保存：询问「退出 / 取消」
  */
 export function useUnsavedExitGuard() {
   const { state } = useSkin()
@@ -16,7 +16,6 @@ export function useUnsavedExitGuard() {
   dirtyRef.current = !!state.dirty
 
   useEffect(() => {
-    // 浏览器 / 开发页
     const onBeforeUnload = (e) => {
       if (!dirtyRef.current) return
       e.preventDefault()
@@ -26,47 +25,56 @@ export function useUnsavedExitGuard() {
     window.addEventListener('beforeunload', onBeforeUnload)
 
     let unlisten = null
-    let cancelled = false
+    let disposed = false
 
-    // Tauri 桌面
     ;(async () => {
       if (!isTauri()) return
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window')
         const win = getCurrentWindow()
         const off = await win.onCloseRequested(async (event) => {
+          // 无未保存修改：放行系统关闭
           if (!dirtyRef.current) return
-          // 阻止默认关闭，弹确认
+
+          // 有未保存：先拦住，再询问
           event.preventDefault()
+          let ok = true
           try {
             const { confirm } = await import('@tauri-apps/plugin-dialog')
-            const ok = await confirm('有未保存的方案，确定退出吗？', {
+            ok = await confirm('有未保存的方案，确定退出吗？', {
               title: '退出确认',
               kind: 'warning',
               okLabel: '退出',
               cancelLabel: '取消',
             })
-            if (ok) {
-              // 确认后真正关闭
-              await win.destroy()
-            }
           } catch {
-            // 对话框失败时允许退出，避免卡死
+            ok = true
+          }
+          if (!ok) return
+
+          // 确认退出：强制销毁窗口（不走 closeRequested，避免再次拦截）
+          try {
             await win.destroy()
+          } catch {
+            try {
+              await win.close()
+            } catch {
+              /* ignore */
+            }
           }
         })
-        if (cancelled) {
+        if (disposed) {
           if (typeof off === 'function') off()
         } else {
           unlisten = off
         }
       } catch {
-        // 非 Tauri 或 API 不可用则忽略
+        /* 非 Tauri 环境 */
       }
     })()
 
     return () => {
-      cancelled = true
+      disposed = true
       window.removeEventListener('beforeunload', onBeforeUnload)
       if (typeof unlisten === 'function') unlisten()
     }
