@@ -1,6 +1,6 @@
 [package]
 name = "weasel-skin-studio"
-version = "1.0.2"
+version = "1.0.3"
 description = "Weasel Skin Studio - 小狼毫可视化皮肤工坊"
 authors = ["Weasel Skin Studio"]
 edition = "2021"
