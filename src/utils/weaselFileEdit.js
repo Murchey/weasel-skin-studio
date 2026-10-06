@@ -187,8 +187,14 @@ export function updateStyleKeysInWeaselText(originalText, patch) {
   const styleRange = findTopLevelKeyRange(lines, 'style')
   if (!styleRange) {
     const block = ['style:']
+    const layoutEntries = []
     for (const [k, v] of Object.entries(patch)) {
-      block.push(`  ${k}: ${formatYamlScalar(v)}`)
+      if (k.startsWith('layout/')) layoutEntries.push([k.slice('layout/'.length), v])
+      else block.push(`  ${k}: ${formatYamlScalar(v)}`)
+    }
+    if (layoutEntries.length) {
+      block.push('  layout:')
+      for (const [k, v] of layoutEntries) block.push(`    ${k}: ${formatYamlScalar(v)}`)
     }
     block.push('')
     return { text: originalText + (originalText.endsWith('\n') ? '' : '\n') + block.join('\n'), action: 'created-style' }
@@ -198,7 +204,13 @@ export function updateStyleKeysInWeaselText(originalText, patch) {
   const body = lines.slice(styleRange.start + 1, styleRange.end)
   const after = lines.slice(styleRange.end)
 
-  const patchKeys = new Set(Object.keys(patch))
+  const scalarPatch = {}
+  const layoutPatch = {}
+  for (const [key, value] of Object.entries(patch)) {
+    if (key.startsWith('layout/')) layoutPatch[key.slice('layout/'.length)] = value
+    else scalarPatch[key] = value
+  }
+  const patchKeys = new Set(Object.keys(scalarPatch))
   const rewritten = []
   const seen = new Set()
 
@@ -207,15 +219,59 @@ export function updateStyleKeysInWeaselText(originalText, patch) {
     if (m && patchKeys.has(m[2])) {
       seen.add(m[2])
       const comment = extractTrailingComment(line)
-      rewritten.push(`${m[1]}${m[2]}: ${formatYamlScalar(patch[m[2]])}${comment ? '  ' + comment : ''}`)
+      rewritten.push(`${m[1]}${m[2]}: ${formatYamlScalar(scalarPatch[m[2]])}${comment ? '  ' + comment : ''}`)
     } else {
       rewritten.push(line)
     }
   }
 
-  for (const [k, v] of Object.entries(patch)) {
+  for (const [k, v] of Object.entries(scalarPatch)) {
     if (!seen.has(k)) {
       rewritten.push(`  ${k}: ${formatYamlScalar(v)}`)
+    }
+  }
+
+  if (Object.keys(layoutPatch).length) {
+    let layoutStart = -1
+    let layoutIndent = '  '
+    for (let i = 0; i < rewritten.length; i++) {
+      const m = rewritten[i].match(/^(\s*)layout\s*:\s*$/)
+      if (m) {
+        layoutStart = i
+        layoutIndent = m[1] || '  '
+        break
+      }
+    }
+
+    if (layoutStart < 0) {
+      rewritten.push(`${'  '}layout:`)
+      for (const [key, value] of Object.entries(layoutPatch)) {
+        rewritten.push(`${'    '}${key}: ${formatYamlScalar(value)}`)
+      }
+    } else {
+      let layoutEnd = rewritten.length
+      for (let i = layoutStart + 1; i < rewritten.length; i++) {
+        const line = rewritten[i]
+        if (!line.trim() || line.trim().startsWith('#')) continue
+        const indent = indentOf(line)
+        if (indent.length <= layoutIndent.length) {
+          layoutEnd = i
+          break
+        }
+      }
+      const layoutBody = rewritten.slice(layoutStart + 1, layoutEnd)
+      const seenLayout = new Set()
+      const nextLayout = layoutBody.map((line) => {
+        const m = line.match(/^(\s+)([A-Za-z_][\w-]*)\s*:/)
+        if (!m || !(m[2] in layoutPatch)) return line
+        seenLayout.add(m[2])
+        const comment = extractTrailingComment(line)
+        return `${m[1]}${m[2]}: ${formatYamlScalar(layoutPatch[m[2]])}${comment ? '  ' + comment : ''}`
+      })
+      for (const [key, value] of Object.entries(layoutPatch)) {
+        if (!seenLayout.has(key)) nextLayout.push(`${layoutIndent}  ${key}: ${formatYamlScalar(value)}`)
+      }
+      rewritten.splice(layoutStart + 1, layoutEnd - layoutStart - 1, ...nextLayout)
     }
   }
 

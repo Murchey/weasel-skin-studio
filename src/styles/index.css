@@ -104,6 +104,152 @@ body {
   color: var(--app-muted);
 }
 
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--app-panel) 88%, var(--app-bg) 12%);
+}
+
+.mode-switch button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--app-muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mode-switch button.is-active {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: 600;
+}
+
+.render-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--app-muted);
+  white-space: nowrap;
+}
+
+.render-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #a1a1aa;
+}
+
+.render-status.is-native .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 18%, transparent);
+}
+
+.preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+
+.preview-text-input {
+  width: min(420px, 48%);
+}
+
+.preview-tip {
+  font-size: 11px;
+}
+
+.preview-candidate-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.preview-candidate-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 136px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.preview-candidate-edit.is-selected {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--app-border) 40%);
+  background: var(--accent-soft);
+}
+
+.preview-candidate-edit > button {
+  flex: 0 0 24px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: color-mix(in oklab, var(--app-bg) 85%, transparent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.preview-candidate-edit .heroui-input {
+  min-width: 92px;
+}
+
+.save-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--app-border) 58%);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.save-hint strong {
+  color: var(--accent-soft-foreground);
+}
+
+.preview-fallback-badge,
+.preview-native-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #000 58%, transparent);
+  color: #fff;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.preview-native-badge {
+  background: color-mix(in srgb, #14532d 88%, transparent);
+}
+
+.preview-region {
+  position: absolute;
+  border: 1px dashed transparent;
+  background: transparent;
+}
+
+.preview-region-candidate:hover {
+  border-color: color-mix(in srgb, var(--accent) 88%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  cursor: pointer;
+}
+
 .brand-mark {
   background: var(--accent);
   color: var(--accent-foreground);
@@ -140,6 +286,15 @@ body {
 }
 .stage-desktop {
   background: linear-gradient(145deg, var(--app-stage-grad-a), var(--app-stage-grad-b));
+}
+
+.preview-frame {
+  position: relative;
+  max-width: min(100%, 900px);
+  padding: clamp(18px, 4vw, 56px);
+  border: 1px solid color-mix(in oklab, var(--app-border) 70%, transparent);
+  background: color-mix(in oklab, var(--app-panel) 36%, transparent);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12);
 }
 
 /* preview candidate: match Weasel — selected hilite has margin 0 */

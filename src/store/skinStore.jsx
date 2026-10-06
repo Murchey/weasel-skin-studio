@@ -9,6 +9,7 @@ import {
 import { PRESET_SCHEMES } from '../data/presets.js'
 import {
   STYLE_DEFAULTS,
+  normalizeWeaselStyle,
   normalizeScheme,
   exportFullYaml,
   exportCustomPatchYaml,
@@ -47,11 +48,13 @@ const initialFile = () => ({
 })
 
 function initialState() {
+  const starter = clone(PRESET_SCHEMES.find((p) => p.id === 'custom') || PRESET_SCHEMES[0])
+  starter.source = 'preset'
   return {
-    style: clone(STYLE_DEFAULTS),
-    // 启动不塞预设：由用户点预设或打开文件后再填充
-    schemes: [],
-    activeSchemeId: '',
+    style: normalizeWeaselStyle({ ...STYLE_DEFAULTS, color_scheme: starter.id }),
+    // 启动即提供一个可编辑的起点，避免用户第一次打开时面对空白画布。
+    schemes: [starter],
+    activeSchemeId: starter.id,
     dirty: false,
     stageMode: 'light',
     sampleText: 'xiao lang hao shu ru fa',
@@ -126,8 +129,8 @@ export function SkinProvider({ children }) {
   const colorFormat = activeScheme?.color_format || 'rgba'
 
   const setColor = useCallback(
-    (key, rgba) => {
-      pushHistory()
+    (key, rgba, options = {}) => {
+      if (options.history !== false) pushHistory()
       patch((prev) => {
         const schemes = prev.schemes.map((s) => {
           if (s.id !== prev.activeSchemeId) return s
@@ -370,7 +373,7 @@ export function SkinProvider({ children }) {
       pushHistory()
       patch((prev) => ({
         ...prev,
-        style: { ...prev.style, [key]: value },
+        style: normalizeWeaselStyle({ ...prev.style, [key]: value }),
         dirty: true,
       }))
     },
@@ -382,10 +385,10 @@ export function SkinProvider({ children }) {
       pushHistory()
       patch((prev) => ({
         ...prev,
-        style: {
+        style: normalizeWeaselStyle({
           ...prev.style,
           layout: { ...prev.style.layout, [key]: value },
-        },
+        }),
         dirty: true,
       }))
     },
@@ -406,7 +409,9 @@ export function SkinProvider({ children }) {
         return {
           ...prev,
           schemes: list,
-          style: stylePatch ? { ...prev.style, ...stylePatch } : prev.style,
+          style: stylePatch
+            ? normalizeWeaselStyle({ ...prev.style, ...stylePatch, layout: { ...prev.style.layout, ...(stylePatch.layout || {}) } })
+            : prev.style,
           activeSchemeId: schemes[0]?.id || prev.activeSchemeId,
           dirty: true,
         }
@@ -414,6 +419,23 @@ export function SkinProvider({ children }) {
     },
     [patch],
   )
+
+  const applyRawYaml = useCallback((text) => {
+    const parsed = parseWeaselYaml(String(text || ''))
+    const schemes = Object.values(parsed.presets).map((s) => ({ ...s, source: 'local' }))
+    setState((prev) => {
+      const nextSchemes = schemes.length ? schemes : prev.schemes
+      const active = nextSchemes.find((s) => s.id === parsed.style.color_scheme) || nextSchemes[0]
+      return {
+        ...prev,
+        style: normalizeWeaselStyle(parsed.style),
+        schemes: nextSchemes,
+        activeSchemeId: active?.id || prev.activeSchemeId,
+        dirty: true,
+        file: { ...prev.file, lastAction: '已应用原始 YAML 参数' },
+      }
+    })
+  }, [])
 
   const resetAll = useCallback(() => {
     setState(initialState())
@@ -429,6 +451,19 @@ export function SkinProvider({ children }) {
 
   const setSample = useCallback((index) => {
     patch((prev) => ({ ...prev, selectedCandidate: index }))
+  }, [patch])
+
+  const setSampleText = useCallback((text) => {
+    patch((prev) => ({ ...prev, sampleText: String(text ?? '') }))
+  }, [patch])
+
+  const setSampleCandidate = useCallback((index, patchValue) => {
+    patch((prev) => {
+      const sampleCandidates = prev.sampleCandidates.map((candidate, i) =>
+        i === index ? { ...candidate, ...patchValue } : candidate,
+      )
+      return { ...prev, sampleCandidates }
+    })
   }, [patch])
 
   const setStageMode = useCallback((mode) => {
@@ -471,21 +506,43 @@ export function SkinProvider({ children }) {
     for (const rid of state.pendingRemovals) {
       text = removeSchemeFromWeaselText(text, rid).text
     }
-    // 4) 写回与显示相关的 style 键（排列 / 预编辑位置 / 字号…）
-    text = updateStyleKeysInWeaselText(text, {
+    // 4) 写回完整 style/layout。此前只写入了少数显示键，导致字体、
+    // 边距和阴影等 UI 修改在覆盖源文件时丢失。
+    const stylePatch = {
       color_scheme: s.id,
+      color_scheme_dark: state.style.color_scheme_dark,
+      font_face: state.style.font_face,
+      label_font_face: state.style.label_font_face,
+      comment_font_face: state.style.comment_font_face,
       font_point: state.style.font_point,
       label_font_point: state.style.label_font_point,
       comment_font_point: state.style.comment_font_point,
+      candidate_abbreviate_length: state.style.candidate_abbreviate_length,
+      inline_preedit: state.style.inline_preedit,
+      preedit_type: state.style.preedit_type,
+      fullscreen: state.style.fullscreen,
       horizontal: state.style.horizontal,
       vertical_text: state.style.vertical_text,
       vertical_text_left_to_right: state.style.vertical_text_left_to_right,
       vertical_text_with_wrap: state.style.vertical_text_with_wrap,
-      inline_preedit: state.style.inline_preedit,
-      preedit_type: state.style.preedit_type,
+      vertical_auto_reverse: state.style.vertical_auto_reverse,
       label_format: state.style.label_format,
       mark_text: state.style.mark_text,
-    }).text
+      hover_type: state.style.hover_type,
+      paging_on_scroll: state.style.paging_on_scroll,
+      antialias_mode: state.style.antialias_mode,
+      display_tray_icon: state.style.display_tray_icon,
+      ascii_tip_follow_cursor: state.style.ascii_tip_follow_cursor,
+      enhanced_position: state.style.enhanced_position,
+      click_to_capture: state.style.click_to_capture,
+      text_orientation: state.style.text_orientation,
+    }
+    for (const [key, value] of Object.entries(state.style.layout || {})) {
+      if (key === 'border_width' || key === 'hilited_corner_radius') continue
+      if (value === '' || value == null) continue
+      stylePatch[`layout/${key}`] = value
+    }
+    text = updateStyleKeysInWeaselText(text, stylePatch).text
     return text
   }, [state.file, state.schemes, state.pendingRemovals, activeScheme, state.style])
 
@@ -517,11 +574,7 @@ export function SkinProvider({ children }) {
       }
       if (schemes.length) {
         next.schemes = schemes
-        next.style = {
-          ...STYLE_DEFAULTS,
-          ...parsed.style,
-          layout: { ...STYLE_DEFAULTS.layout, ...(parsed.style.layout || {}) },
-        }
+          next.style = normalizeWeaselStyle(parsed.style)
         const preferred = schemes.find((s) => s.id === parsed.style.color_scheme) || schemes[0]
         next.activeSchemeId = preferred.id
       } else {
@@ -578,8 +631,8 @@ export function SkinProvider({ children }) {
   }, [state.file, activeScheme, state.schemes, buildSaveText, canWriteFile])
 
   const previewSaveText = useCallback(() => {
-    return { text: buildSaveText(), schemeId: activeScheme.id }
-  }, [buildSaveText, activeScheme])
+    return { text: buildCustomPatch(), schemeId: activeScheme.id }
+  }, [buildCustomPatch, activeScheme])
 
   const removeSchemeFromFile = useCallback(
     async (schemeId) => {
@@ -663,9 +716,6 @@ export function SkinProvider({ children }) {
     const tauriPathWrite = typeof state.file.handle === 'string'
     if (path && tauriPathWrite) {
       // 用路径直接写（Tauri handle 是 path 字符串）
-      const handle = typeof state.file.handle === 'string' && /weasel\.custom\.ya?ml$/i.test(state.file.handle)
-        ? state.file.handle
-        : path
       await writeWeaselFile(path, text)
       setState((prev) => ({
         ...prev,
@@ -689,7 +739,7 @@ export function SkinProvider({ children }) {
       },
     }))
     return { ok: !!ok, written: false, needsDownload: !ok, exported: true, patched: true }
-  }, [buildCustomPatch, state.file, canWriteFile])
+  }, [buildCustomPatch, state.file])
 
   /** 覆盖当前已打开的源文件 */
   const overwriteSource = useCallback(async () => {
@@ -783,10 +833,13 @@ export function SkinProvider({ children }) {
       setLayout,
       setStageMode,
       importSchemes,
+      applyRawYaml,
       resetAll,
       exportAll,
       exportActive,
       setSample,
+      setSampleText,
+      setSampleCandidate,
       setStudioMode,
       openWeaselFile,
       saveToWeaselFile,
@@ -826,10 +879,13 @@ export function SkinProvider({ children }) {
       setLayout,
       setStageMode,
       importSchemes,
+      applyRawYaml,
       resetAll,
       exportAll,
       exportActive,
       setSample,
+      setSampleText,
+      setSampleCandidate,
       setStudioMode,
       openWeaselFile,
       saveToWeaselFile,

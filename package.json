@@ -1,12 +1,13 @@
 {
   "name": "weasel-skin-studio",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:style": "node scripts/test-style.mjs",
     "tauri": "node run-tauri.cjs",
     "tauri:dev": "node run-tauri.cjs dev",
     "tauri:build": "node run-tauri.cjs build",

@@ -3840,6 +3840,9 @@ dependencies = [
 name = "weasel-skin-studio"
 version = "1.0.2"
 dependencies = [
+ "base64 0.22.1",
+ "cc",
+ "png 0.17.16",
  "serde",
  "serde_json",
  "tauri",

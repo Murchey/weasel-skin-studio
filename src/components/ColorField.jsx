@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input, Tooltip, Slider, Button } from '@heroui/react'
 import { toCss, parseHexToRgba, rgbaToHex } from '../utils/color.js'
 import { useSkin } from '../store/skinStore.jsx'
@@ -7,6 +7,8 @@ import { useInspect } from '../hooks/useInspect.jsx'
 export default function ColorField({ fieldKey, label, optional = false }) {
   const { getColor, setColor, weaselColor } = useSkin()
   const { show, hide } = useInspect()
+  const alphaDrag = useRef(false)
+  const colorDrag = useRef(false)
   const value = getColor(fieldKey)
 
   const hexFromStore = useMemo(() => (value ? rgbaToHex(value, true) : '#00000000'), [value])
@@ -35,17 +37,21 @@ export default function ColorField({ fieldKey, label, optional = false }) {
 
   function onColorInput(e) {
     const prev = value
+    const first = !colorDrag.current
+    colorDrag.current = true
     setColor(fieldKey, {
       ...parseHexToRgba(e.target.value),
       a: prev?.a ?? 255,
-    })
+    }, { history: first })
   }
 
   function onAlpha(v) {
     const prev = value
     if (!prev) return
     const next = Array.isArray(v) ? v[0] : v
-    setColor(fieldKey, { ...prev, a: Math.round(next) })
+    const first = !alphaDrag.current
+    alphaDrag.current = true
+    setColor(fieldKey, { ...prev, a: Math.round(next) }, { history: first })
   }
 
   return (
@@ -74,6 +80,8 @@ export default function ColorField({ fieldKey, label, optional = false }) {
             type="color"
             className="absolute inset-0 cursor-pointer opacity-0"
             value={hexFromStore.slice(0, 7)}
+            onPointerDown={() => { colorDrag.current = false }}
+            onBlur={() => { colorDrag.current = false }}
             onChange={onColorInput}
           />
         </label>
@@ -100,8 +108,10 @@ export default function ColorField({ fieldKey, label, optional = false }) {
                 minValue={0}
                 maxValue={255}
                 step={1}
-                value={[value.a ?? 255]}
-                onChange={(v) => onAlpha(Array.isArray(v) ? v[0] : v)}
+                 value={[value.a ?? 255]}
+                 onPointerDown={() => { alphaDrag.current = false }}
+                 onPointerUp={() => { alphaDrag.current = false }}
+                 onChange={(v) => onAlpha(Array.isArray(v) ? v[0] : v)}
               >
                 <Slider.Track>
                   <Slider.Fill />

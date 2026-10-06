@@ -3,19 +3,16 @@ import {
   Button,
   Dropdown,
   Input,
-  Modal,
   RadioGroup,
-  Switch,
   Tabs,
-  Tooltip,
 } from '@heroui/react'
 import { Radio } from '@heroui/react'
 import appIcon from '../assets/app-icon.svg'
 import ColorField from './ColorField.jsx'
-import LivePreview from './LivePreview.jsx'
+import NativePreview from './NativePreview.jsx'
 import { SkinProvider, useSkin } from '../store/skinStore.jsx'
 import { useThemeMode } from '../hooks/useThemeMode.js'
-import { InspectProvider, InspectLabel, useInspect } from '../hooks/useInspect.jsx'
+import { InspectProvider, InspectLabel } from '../hooks/useInspect.jsx'
 import { ToastProvider, useToast } from '../hooks/useToast.jsx'
 import { useUnsavedExitGuard } from '../hooks/useUnsavedExitGuard.js'
 import { usePanelWidth, PanelResizer } from '../hooks/usePanelWidth.jsx'
@@ -25,6 +22,12 @@ import { toCss } from '../utils/color.js'
 import { exportSchemeYaml } from '../utils/weaselYaml.js'
 
 const groupOrder = ['window', 'preedit', 'candidate', 'comment', 'hilited', 'paging']
+const BASIC_COLOR_KEYS = [
+  'back_color', 'border_color', 'text_color', 'candidate_text_color',
+  'label_color', 'comment_text_color', 'hilited_candidate_back_color',
+  'hilited_candidate_text_color', 'hilited_label_color',
+  'hilited_comment_text_color', 'hilited_mark_color',
+]
 
 function RangeRow({ label, value, min, max, unit = 'px', onChange, inspectKey }) {
   return (
@@ -49,6 +52,46 @@ function RangeRow({ label, value, min, max, unit = 'px', onChange, inspectKey })
         {unit}
       </span>
     </div>
+  )
+}
+
+function NumberRow({ label, value, min, max, step = 1, unit = 'px', onChange, inspectKey }) {
+  return (
+    <FormRow label={label} inspectKey={inspectKey}>
+      <div className="flex items-center gap-2">
+        <Input
+          size="sm"
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={String(value ?? '')}
+          onChange={(e) => {
+            const next = Number(e.target.value)
+            if (Number.isFinite(next)) onChange(next)
+          }}
+          aria-label={label}
+        />
+        {unit ? <span className="text-[11px] app-muted">{unit}</span> : null}
+      </div>
+    </FormRow>
+  )
+}
+
+function CheckRow({ label, checked, onChange, inspectKey, hint }) {
+  return (
+    <FormRow label={label} inspectKey={inspectKey}>
+      <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={!!checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ accentColor: 'var(--accent)' }}
+        />
+        <span>{checked ? '开启' : '关闭'}</span>
+        {hint ? <span className="text-[10px] app-muted">{hint}</span> : null}
+      </label>
+    </FormRow>
   )
 }
 
@@ -140,6 +183,19 @@ function StudioBody() {
   const [confirmAction, setConfirmAction] = useState(null)
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
+  const [uiMode, setUiMode] = useState(() => {
+    try { return localStorage.getItem('wss-ui-mode') || 'basic' } catch { return 'basic' }
+  })
+  const [schemeSearch, setSchemeSearch] = useState('')
+  const [presetSearch, setPresetSearch] = useState('')
+  const [renderer, setRenderer] = useState('fallback')
+  const [previewDpi, setPreviewDpi] = useState(96)
+  const [rawYamlDraft, setRawYamlDraft] = useState('')
+
+  useEffect(() => {
+    try { localStorage.setItem('wss-ui-mode', uiMode) } catch { /* browser privacy mode */ }
+    if (uiMode === 'basic' && rightTab === 'meta') setRightTab('color')
+  }, [uiMode, rightTab])
 
   // Ctrl/Cmd+Z 撤销上一步（输入框内不拦截）
   useEffect(() => {
@@ -187,17 +243,46 @@ function StudioBody() {
     try {
       const { text } = store.previewSaveText()
       setPreviewText(text)
-      setPreviewTitle('写入预览')
-      setConfirmAction(() => onSave)
+      setPreviewTitle('保存补丁预览')
+      setConfirmAction(() => onSavePatch)
       setPreviewOpen(true)
     } catch (e) {
       showToast.danger(e?.message || String(e), { title: '预览失败' })
     }
   }
 
-  function onSave() {
-    // 弹出：覆盖源文件 / 另存为
+  async function onSavePatch() {
+    setPreviewOpen(false)
+    try {
+      const result = await store.saveCustomPatch()
+      if (result?.ok) {
+        showToast.success(
+          result.written ? '已写入 weasel.custom.yaml' : '已导出 weasel.custom.yaml',
+          { title: '补丁已保存' },
+        )
+      } else {
+        showToast.info('已取消保存补丁', { title: '未保存' })
+      }
+    } catch (e) {
+      showToast.danger(e?.message || String(e), { title: '保存补丁失败' })
+    }
+  }
+
+  function onOpenAdvancedSave() {
     setSaveChoiceOpen(true)
+  }
+
+  function loadRawYaml() {
+    setRawYamlDraft(state.file.loaded && state.file.text ? state.file.text : store.exportAll())
+  }
+
+  function applyRawYaml() {
+    try {
+      store.applyRawYaml(rawYamlDraft)
+      showToast.success('已应用原始 YAML 参数', { title: '参数已更新' })
+    } catch (e) {
+      showToast.danger(e?.message || String(e), { title: 'YAML 无效' })
+    }
   }
 
   async function onOverwriteSource() {
@@ -290,6 +375,17 @@ function StudioBody() {
         ? 'vt'
         : 'v'
 
+  const visibleSchemes = (state.schemes || []).filter((scheme) => {
+    const q = schemeSearch.trim().toLowerCase()
+    if (!q) return true
+    return `${scheme.name} ${scheme.id} ${scheme.author}`.toLowerCase().includes(q)
+  })
+  const visiblePresets = PRESET_SCHEMES.filter((preset) => {
+    const q = presetSearch.trim().toLowerCase()
+    if (!q) return true
+    return `${preset.name} ${preset.id} ${preset.author}`.toLowerCase().includes(q)
+  })
+
   return (
     <div className="app-shell flex h-full min-h-0 flex-col">
       <header className="app-panel flex h-12 shrink-0 items-center gap-3 border-b px-3">
@@ -304,7 +400,7 @@ function StudioBody() {
           <div>
             <div className="text-sm font-semibold">Weasel Skin Studio</div>
             <div className="text-[11px] app-muted">
-              {state.file.loaded ? `${state.file.name} · ${fileLabel}` : '可视化皮肤工坊'}
+              {state.file.loaded ? `${state.file.name} · ${fileLabel}` : '可视化皮肤工坊 · 所见即所得'}
             </div>
           </div>
         </div>
@@ -312,6 +408,18 @@ function StudioBody() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-2">
+          <div className="mode-switch" role="group" aria-label="编辑模式">
+            <button
+              type="button"
+              className={uiMode === 'basic' ? 'is-active' : ''}
+              onClick={() => setUiMode('basic')}
+            >基础</button>
+            <button
+              type="button"
+              className={uiMode === 'advanced' ? 'is-active' : ''}
+              onClick={() => setUiMode('advanced')}
+            >高级</button>
+          </div>
           <ThemeToggle theme={theme} toggle={toggle} />
           <Button
             size="sm"
@@ -324,11 +432,23 @@ function StudioBody() {
           <Button
             size="sm"
             color="primary"
-            onPress={onSave}
-            title="生成 weasel.custom.yaml 的 patch 并写入/另存，不直接改 weasel.yaml"
+            onPress={onPreviewWrite}
+            title="优先生成 weasel.custom.yaml 的 patch"
           >
-            保存
+            保存补丁
           </Button>
+          {uiMode === 'advanced' && (
+            <Dropdown>
+              <Dropdown.Trigger size="sm" variant="flat">
+                高级操作
+              </Dropdown.Trigger>
+              <Dropdown.Popover>
+                <Dropdown.Menu onAction={(key) => key === 'save-options' && onOpenAdvancedSave()} aria-label="高级保存操作">
+                  <Dropdown.Item id="save-options">覆盖源文件 / 另存为</Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          )}
           <Dropdown>
             <Dropdown.Trigger size="sm" variant="flat">
               导出
@@ -368,13 +488,21 @@ function StudioBody() {
                 </Button>
               </div>
             </div>
+            <Input
+              size="sm"
+              value={schemeSearch}
+              onChange={(e) => setSchemeSearch(e.target.value)}
+              placeholder="搜索方案名称或 id"
+              aria-label="搜索配色方案"
+              className="mb-2"
+            />
             {(state.schemes || []).length === 0 && (
               <div className="rounded-xl border border-dashed border-(--app-border) p-3 text-[11px] app-muted">
                 暂无配色方案。点「浏览预设」或打开配置文件。
               </div>
             )}
             <div className="space-y-1.5">
-              {(state.schemes || []).map((s) => (
+              {visibleSchemes.map((s) => (
                 <div
                   key={s.id}
                   className={`cursor-pointer rounded-xl border p-2 transition ${
@@ -464,8 +592,17 @@ function StudioBody() {
               </div>
             )}
             {showPresets && (
-            <div className="grid grid-cols-2 gap-2">
-              {PRESET_SCHEMES.map((p) => (
+            <div>
+              <Input
+                size="sm"
+                value={presetSearch}
+                onChange={(e) => setPresetSearch(e.target.value)}
+                placeholder="搜索内置预设"
+                aria-label="搜索内置预设"
+                className="mb-2"
+              />
+              <div className="grid grid-cols-2 gap-2">
+              {visiblePresets.map((p) => (
                 <button
                   key={p.id}
                   type="button"
@@ -482,6 +619,7 @@ function StudioBody() {
                   <div className="truncate text-[11px] font-medium">{p.name}</div>
                 </button>
               ))}
+              </div>
             </div>
             )}
           </section>
@@ -513,8 +651,48 @@ function StudioBody() {
               {layoutMode === 'h' ? '候选横排' : layoutMode === 'vt' ? '竖排文字' : '候选竖排'} ·{' '}
               {state.style.font_point}pt
             </span>
+            <span className={`render-status ${renderer === 'native' ? 'is-native' : ''}`}>
+              <span className="status-dot" />
+              {renderer === 'native' ? '原生渲染' : '近似渲染'} · {previewDpi} DPI
+            </span>
             <div className="flex-1" />
             <span className="text-[11px] app-muted">{state.dirty ? '有未保存修改' : '已同步'}</span>
+          </div>
+          <div className="preview-controls app-panel border-b px-3 py-2">
+            <Input
+              size="sm"
+              label="示例输入"
+              labelPlacement="outside-left"
+              value={state.sampleText}
+              onChange={(e) => store.setSampleText(e.target.value)}
+              className="preview-text-input"
+              aria-label="示例输入"
+            />
+            <div className="preview-tip app-muted">点击候选切换高亮；右侧颜色项悬停可定位作用区域</div>
+          </div>
+          <div className="preview-candidate-strip app-panel border-b px-3 py-2">
+            {state.sampleCandidates.map((candidate, index) => (
+              <div key={index} className={`preview-candidate-edit ${index === state.selectedCandidate ? 'is-selected' : ''}`}>
+                <button type="button" onClick={() => store.setSample(index)} aria-label={`高亮候选 ${index + 1}`}>
+                  {candidate.label || index + 1}
+                </button>
+                <Input
+                  size="sm"
+                  value={candidate.text}
+                  onChange={(e) => store.setSampleCandidate(index, { text: e.target.value })}
+                  aria-label={`候选 ${index + 1} 内容`}
+                />
+                {uiMode === 'advanced' && (
+                  <Input
+                    size="sm"
+                    value={candidate.comment || ''}
+                    onChange={(e) => store.setSampleCandidate(index, { comment: e.target.value })}
+                    placeholder="注释"
+                    aria-label={`候选 ${index + 1} 注释`}
+                  />
+                )}
+              </div>
+            ))}
           </div>
           <div
             className={`scroll-y flex flex-1 items-center justify-center p-8 stage-${state.stageMode}`}
@@ -536,7 +714,10 @@ function StudioBody() {
               </div>
             ) : (
               <div className="preview-frame rounded-2xl">
-                <LivePreview />
+                <NativePreview
+                  onRendererChange={setRenderer}
+                  onDpiChange={setPreviewDpi}
+                />
               </div>
             )}
           </div>
@@ -561,32 +742,31 @@ function StudioBody() {
               <Button
                 size="sm"
                 variant="flat"
-                isDisabled={!state.file.loaded}
                 onPress={onPreviewWrite}
               >
                 预览写入
               </Button>
-              <Button
-                size="sm"
-                variant="flat"
-                color="danger"
-                isDisabled={!state.file.loaded}
-                onPress={onRemoveFromFile}
-              >
-                从文件删除
-              </Button>
+              {uiMode === 'advanced' && (
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="danger"
+                  isDisabled={!state.file.loaded}
+                  onPress={onRemoveFromFile}
+                >
+                  从文件删除
+                </Button>
+              )}
             </div>
-            <div className="rounded-lg border border-(--accent) bg-(--accent-soft) p-2 text-[11px] leading-relaxed">
-              <div className="mb-1 font-semibold">提示：用补丁配置，不要直接改 weasel.yaml</div>
-              <div className="app-muted">
-                按 Rime 定製指南：自定义写入 <span className="mono font-semibold text-[color:var(--accent-soft-foreground)]">weasel.custom.yaml</span> 的 <span className="mono">patch:</span>
-                （或部署时的 patch），不要直接改 <span className="mono">weasel.yaml</span>——重新部署可能被覆盖。
-                「保存补丁」写 weasel.custom.yaml 的 patch，不直接改 weasel.yaml。写完请重新部署。部署后设定页打不开，多半是 YAML 已损坏。
+            <div className="save-hint">
+              <strong>推荐保存为补丁</strong>
+              <span>写入 <span className="mono">weasel.custom.yaml</span>，重新部署后生效。</span>
+            </div>
+            {uiMode === 'advanced' && (
+              <div className="mt-2 text-[10px] leading-relaxed app-muted">
+                高级操作里的“覆盖源文件”会同步左侧方案列表并写入完整 style/layout；原文件中的未知字段和注释会保留。
               </div>
-            </div>
-            <div className="mt-2 text-[10px] leading-relaxed app-muted">
-              保存 = 当前配色 + 显示方式 + 字体/布局 写入已打开文件；文件里多余方案会删掉，只保留左侧列表。
-            </div>
+            )}
           </section>
 
           <div className="p-3">
@@ -595,7 +775,7 @@ function StudioBody() {
                 <Tabs.Tab id="color">配色</Tabs.Tab>
                 <Tabs.Tab id="layout">布局</Tabs.Tab>
                 <Tabs.Tab id="font">字体</Tabs.Tab>
-                <Tabs.Tab id="meta">方案</Tabs.Tab>
+                {uiMode === 'advanced' && <Tabs.Tab id="meta">方案</Tabs.Tab>}
               </Tabs.List>
 
               <Tabs.Panel id="color" className="pt-3">
@@ -625,21 +805,31 @@ function StudioBody() {
                     </Radio>
                   </RadioGroup>
                 </div>
-                {groupOrder.map((g) => (
-                  <div key={g} className="mb-4">
-                    <div className="mb-1 text-[11px] font-semibold app-muted">
+                {groupOrder
+                  .filter((g) => uiMode === 'advanced' || (groupedFields[g] || []).some((f) => BASIC_COLOR_KEYS.includes(f.key)))
+                  .map((g) => (
+                  <details
+                    key={g}
+                    className="mb-3 rounded-lg border border-(--app-border) px-2"
+                    defaultOpen={uiMode === 'advanced' || ['window', 'candidate', 'hilited'].includes(g)}
+                  >
+                    <summary className="cursor-pointer py-2 text-[11px] font-semibold app-muted">
                       {COLOR_GROUPS[g]}
+                    </summary>
+                    <div className="pb-1">
+                      {(groupedFields[g] || [])
+                        .filter((f) => uiMode === 'advanced' || BASIC_COLOR_KEYS.includes(f.key))
+                        .map((f) => (
+                          <ColorField
+                            key={f.key}
+                            fieldKey={f.key}
+                            label={f.label}
+                            optional={f.optional}
+                          />
+                        ))}
                     </div>
-                    {(groupedFields[g] || []).map((f) => (
-                      <ColorField
-                        key={f.key}
-                        fieldKey={f.key}
-                        label={f.label}
-                        optional={f.optional}
-                      />
-                    ))}
-                  </div>
-                ))}
+                  </details>
+                  ))}
               </Tabs.Panel>
 
               <Tabs.Panel id="layout" className="pt-3">
@@ -710,20 +900,45 @@ function StudioBody() {
                   max={24}
                   onChange={(v) => store.setLayout('round_corner', v)}
                 />
-                <RangeRow
-                  label="边距 X" inspectKey="margin_x"
-                  value={state.style.layout.margin_x}
-                  min={0}
-                  max={40}
-                  onChange={(v) => store.setLayout('margin_x', v)}
-                />
-                <RangeRow
-                  label="边距 Y" inspectKey="margin_y"
-                  value={state.style.layout.margin_y}
-                  min={0}
-                  max={40}
-                  onChange={(v) => store.setLayout('margin_y', v)}
-                />
+                {uiMode === 'advanced' ? (
+                  <>
+                    <NumberRow
+                      label="边距 X"
+                      inspectKey="margin_x"
+                      value={state.style.layout.margin_x}
+                      min={-200}
+                      max={200}
+                      onChange={(v) => store.setLayout('margin_x', v)}
+                    />
+                    <NumberRow
+                      label="边距 Y"
+                      inspectKey="margin_y"
+                      value={state.style.layout.margin_y}
+                      min={-200}
+                      max={200}
+                      onChange={(v) => store.setLayout('margin_y', v)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <RangeRow
+                      label="边距 X"
+                      inspectKey="margin_x"
+                      value={state.style.layout.margin_x}
+                      min={0}
+                      max={40}
+                      onChange={(v) => store.setLayout('margin_x', v)}
+                    />
+                    <RangeRow
+                      label="边距 Y"
+                      inspectKey="margin_y"
+                      value={state.style.layout.margin_y}
+                      min={0}
+                      max={40}
+                      onChange={(v) => store.setLayout('margin_y', v)}
+                    />
+                  </>
+                )}
                 <RangeRow
                   label="候选间距" inspectKey="candidate_spacing"
                   value={state.style.layout.candidate_spacing}
@@ -752,6 +967,67 @@ function StudioBody() {
                   max={24}
                   onChange={(v) => store.setLayout('shadow_radius', v)}
                 />
+                {uiMode === 'advanced' && (
+                  <>
+                    <RangeRow label="基础间距" inspectKey="spacing" value={state.style.layout.spacing} min={0} max={48} onChange={(v) => store.setLayout('spacing', v)} />
+                    <RangeRow label="最小宽度" inspectKey="min_width" value={state.style.layout.min_width} min={0} max={1200} onChange={(v) => store.setLayout('min_width', v)} />
+                    <RangeRow label="最大宽度" inspectKey="max_width" value={state.style.layout.max_width} min={0} max={1600} onChange={(v) => store.setLayout('max_width', v)} />
+                    <NumberRow label="最小高度" inspectKey="min_height" value={state.style.layout.min_height} min={0} max={1200} onChange={(v) => store.setLayout('min_height', v)} />
+                    <NumberRow label="最大高度" inspectKey="max_height" value={state.style.layout.max_height} min={0} max={1600} onChange={(v) => store.setLayout('max_height', v)} />
+                    <NumberRow label="高亮内边距 X" inspectKey="hilite_padding_x" value={state.style.layout.hilite_padding_x} min={0} max={64} onChange={(v) => store.setLayout('hilite_padding_x', v)} />
+                    <NumberRow label="高亮内边距 Y" inspectKey="hilite_padding_y" value={state.style.layout.hilite_padding_y} min={0} max={64} onChange={(v) => store.setLayout('hilite_padding_y', v)} />
+                    <NumberRow label="阴影偏移 X" inspectKey="shadow_offset_x" value={state.style.layout.shadow_offset_x} min={-100} max={100} onChange={(v) => store.setLayout('shadow_offset_x', v)} />
+                    <NumberRow label="阴影偏移 Y" inspectKey="shadow_offset_y" value={state.style.layout.shadow_offset_y} min={-100} max={100} onChange={(v) => store.setLayout('shadow_offset_y', v)} />
+                    <FormRow label="对齐方式" inspectKey="align_type">
+                      <SegmentedChoice
+                        ariaLabel="候选对齐方式"
+                        value={state.style.layout.align_type || 'center'}
+                        onChange={(v) => store.setLayout('align_type', v)}
+                        options={[
+                          { value: 'top', label: '顶部', hint: '按上边缘对齐' },
+                          { value: 'center', label: '居中', hint: '默认' },
+                          { value: 'bottom', label: '底部', hint: '按基线底部对齐' },
+                        ]}
+                      />
+                    </FormRow>
+                    <NumberRow
+                      label="基线"
+                      inspectKey="baseline"
+                      value={state.style.layout.baseline}
+                      min={0}
+                      max={200}
+                      unit="%"
+                      onChange={(v) => store.setLayout('baseline', v)}
+                    />
+                    <NumberRow
+                      label="行距"
+                      inspectKey="linespacing"
+                      value={state.style.layout.linespacing}
+                      min={0}
+                      max={300}
+                      unit="%"
+                      onChange={(v) => store.setLayout('linespacing', v)}
+                    />
+                    <CheckRow
+                      label="竖排从左到右"
+                      inspectKey="vertical_text_left_to_right"
+                      checked={state.style.vertical_text_left_to_right}
+                      onChange={(v) => store.setStyle('vertical_text_left_to_right', v)}
+                    />
+                    <CheckRow
+                      label="竖排文字换列"
+                      inspectKey="vertical_text_with_wrap"
+                      checked={state.style.vertical_text_with_wrap}
+                      onChange={(v) => store.setStyle('vertical_text_with_wrap', v)}
+                    />
+                    <CheckRow
+                      label="竖排自动反向"
+                      inspectKey="vertical_auto_reverse"
+                      checked={state.style.vertical_auto_reverse}
+                      onChange={(v) => store.setStyle('vertical_auto_reverse', v)}
+                    />
+                  </>
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel id="font" className="pt-3">
@@ -821,6 +1097,50 @@ function StudioBody() {
                     onChange={(e) => store.setStyle('comment_font_face', e.target.value)}
                   />
                 </FormRow>
+                {uiMode === 'advanced' && (
+                  <>
+                    <NumberRow
+                      label="候选缩写长度"
+                      inspectKey="candidate_abbreviate_length"
+                      value={state.style.candidate_abbreviate_length}
+                      min={0}
+                      max={200}
+                      unit="字"
+                      onChange={(v) => store.setStyle('candidate_abbreviate_length', v)}
+                    />
+                    <CheckRow
+                      label="滚轮翻页"
+                      inspectKey="paging_on_scroll"
+                      checked={state.style.paging_on_scroll}
+                      onChange={(v) => store.setStyle('paging_on_scroll', v)}
+                    />
+                    <FormRow label="抗锯齿" inspectKey="antialias_mode">
+                      <SegmentedChoice
+                        ariaLabel="抗锯齿模式"
+                        value={state.style.antialias_mode || 'default'}
+                        onChange={(v) => store.setStyle('antialias_mode', v)}
+                        options={[
+                          { value: 'default', label: '默认' },
+                          { value: 'cleartype', label: 'ClearType' },
+                          { value: 'grayscale', label: '灰度' },
+                          { value: 'aliased', label: '像素' },
+                        ]}
+                      />
+                    </FormRow>
+                    <FormRow label="悬停高亮" inspectKey="hover_type">
+                      <SegmentedChoice
+                        ariaLabel="悬停高亮模式"
+                        value={state.style.hover_type || 'none'}
+                        onChange={(v) => store.setStyle('hover_type', v)}
+                        options={[
+                          { value: 'none', label: '关闭' },
+                          { value: 'semi_hilite', label: '半高亮' },
+                          { value: 'hilite', label: '完整高亮' },
+                        ]}
+                      />
+                    </FormRow>
+                  </>
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel id="meta" className="pt-3">
@@ -854,6 +1174,37 @@ function StudioBody() {
                     导出皮肤 YAML
                   </Button>
                 </div>
+                <details className="mt-4 rounded-lg border border-(--app-border) px-2" open={!!rawYamlDraft}>
+                  <summary className="cursor-pointer py-2 text-xs font-semibold">原始 YAML 参数</summary>
+                  <div className="pb-2">
+                    <p className="mb-2 text-[10px] leading-relaxed app-muted">
+                      可编辑完整 style/layout 和配色方案。应用前会校验 YAML；未知字段会在当前编辑会话中保留。
+                    </p>
+                    {!rawYamlDraft && (
+                      <Button size="sm" variant="flat" onPress={loadRawYaml}>
+                        加载当前 YAML
+                      </Button>
+                    )}
+                    {rawYamlDraft && (
+                      <>
+                        <textarea
+                          className="yaml-box min-h-[240px]"
+                          value={rawYamlDraft}
+                          onChange={(e) => setRawYamlDraft(e.target.value)}
+                          aria-label="原始 YAML 参数"
+                        />
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" color="primary" onPress={applyRawYaml}>
+                            应用 YAML
+                          </Button>
+                          <Button size="sm" variant="flat" onPress={loadRawYaml}>
+                            重置草稿
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </details>
               </Tabs.Panel>
             </Tabs>
           </div>
@@ -881,6 +1232,9 @@ function StudioBody() {
                   {state.file.loaded ? state.file.name : '未打开文件'}
                 </span>
               </Button>
+              <div className="px-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+                覆盖会直接修改当前文件，可能被小狼毫更新覆盖；建议优先保存补丁。
+              </div>
               <Button
                 className="w-full justify-start"
                 variant="flat"
@@ -915,7 +1269,21 @@ function StudioBody() {
             </div>
             <div className="p-5">
               <div className="mb-2 text-[11px] app-muted">
-                下列文本将在「保存」时写入 weasel.yaml（其余内容保留）
+                下列内容将生成 weasel.custom.yaml 补丁；原文件中的注释和未知字段不会被改写。
+              </div>
+              <div className="mb-3 grid grid-cols-3 gap-2 text-[11px]">
+                <div className="rounded-lg border border-(--app-border) p-2">
+                  <div className="app-muted">当前方案</div>
+                  <div className="mt-1 truncate font-medium">{activeScheme?.name || activeScheme?.id || '—'}</div>
+                </div>
+                <div className="rounded-lg border border-(--app-border) p-2">
+                  <div className="app-muted">颜色字段</div>
+                  <div className="mt-1 font-medium">{Object.keys(activeScheme?.colors || {}).length}</div>
+                </div>
+                <div className="rounded-lg border border-(--app-border) p-2">
+                  <div className="app-muted">模式</div>
+                  <div className="mt-1 font-medium">{uiMode === 'advanced' ? '完整参数' : '基础参数'}</div>
+                </div>
               </div>
               <textarea className="yaml-box" readOnly value={previewText} />
             </div>
@@ -924,7 +1292,7 @@ function StudioBody() {
                 关闭
               </Button>
               <Button color="primary" onPress={() => confirmAction?.()}>
-                保存
+                保存补丁
               </Button>
             </div>
           </div>

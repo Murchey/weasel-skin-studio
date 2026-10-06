@@ -349,15 +349,29 @@ export default function LivePreview() {
                     )
                   : inspTag(['label_color', 'candidate_text_color', 'comment_text_color'], '候选标签/文字')}
                 {markVisible && selected && (
-                  <span
-                    style={{
-                      color: css('hilited_mark_color', fg),
-                      fontSize: fontPx,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {style.mark_text || ''}
-                  </span>
+                  style.mark_text ? (
+                    <span
+                      style={{
+                        color: css('hilited_mark_color', fg),
+                        fontSize: fontPx,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {style.mark_text}
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: Math.max(3, Math.round(fontPx / 7)),
+                        height: '70%',
+                        minHeight: 10,
+                        borderRadius: 2,
+                        background: css('hilited_mark_color', fg),
+                        flex: '0 0 auto',
+                      }}
+                    />
+                  )
                 )}
                 <span
                   style={{
