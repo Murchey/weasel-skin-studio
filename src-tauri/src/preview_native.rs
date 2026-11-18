@@ -132,11 +132,15 @@ pub fn render(request: PreviewRequest) -> Result<PreviewResponse, String> {
         WssColor { r: 255, g: 255, b: 255, a: 255 }, WssColor { r: 32, g: 32, b: 32, a: 255 }, WssColor::default(),
         WssColor::default(), WssColor::default(), WssColor { r: 120, g: 120, b: 120, a: 255 }, WssColor { r: 120, g: 120, b: 120, a: 255 },
         WssColor::default(), WssColor::default(), WssColor::default(), WssColor::default(),
+        // preedit_color（C++ 侧索引 27，当前渲染器未读取，保留与 COLOR_KEYS 等长）
+        WssColor { r: 32, g: 32, b: 32, a: 255 },
     ];
     let color_obj = request.scheme.colors.as_object();
     let mut colors = [WssColor::default(); 28];
     for (i, key) in COLOR_KEYS.iter().enumerate() {
-        colors[i] = color(color_obj.and_then(|map| map.get(*key)), defaults[i]);
+        // 用 get() 兜底：即便将来 COLOR_KEYS 与 defaults 长度不一致，也不能在渲染线程里 panic
+        let fallback = defaults.get(i).copied().unwrap_or_default();
+        colors[i] = color(color_obj.and_then(|map| map.get(*key)), fallback);
     }
 
     let mut c_strings: Vec<(CString, CString, CString)> = Vec::with_capacity(request.candidates.len());

@@ -630,6 +630,12 @@ export function SkinProvider({ children }) {
     return { ok: true, written: false, needsDownload: true, schemeId: s.id }
   }, [state.file, activeScheme, state.schemes, buildSaveText, canWriteFile])
 
+  const buildCustomPatch = useCallback(() => {
+    return exportCustomPatchYaml(state.style, state.schemes, {
+      removeIds: state.pendingRemovals,
+    })
+  }, [state.style, state.schemes, state.pendingRemovals])
+
   const previewSaveText = useCallback(() => {
     return { text: buildCustomPatch(), schemeId: activeScheme.id }
   }, [buildCustomPatch, activeScheme])
@@ -686,12 +692,6 @@ export function SkinProvider({ children }) {
       file: { ...prev.file, lastAction: '已导出 weasel-skin.yaml' },
     }))
   }, [exportAll])
-
-  const buildCustomPatch = useCallback(() => {
-    return exportCustomPatchYaml(state.style, state.schemes, {
-      removeIds: state.pendingRemovals,
-    })
-  }, [state.style, state.schemes, state.pendingRemovals])
 
   /**
    * 按 Rime 定製指南：默认写 weasel.custom.yaml 补丁，不直接改 weasel.yaml。
