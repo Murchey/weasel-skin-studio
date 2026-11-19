@@ -409,8 +409,10 @@ extern "C" int wss_render_preview(const WssPreviewInput* input, WssPreviewOutput
   std::vector<int> rowHeights(input->candidate_count, 0);
 
   if (horizontal) {
+    // Horizontal candidates share one row: only x advances, y stays the row top.
+    const int top = offsetY + marginY + (preeditHeight ? preeditHeight + input->spacing : 0);
     int width = offsetX + marginX;
-    int height = offsetY + marginY + (preeditHeight ? preeditHeight + input->spacing : 0);
+    int bottom = top;
     for (size_t i = 0; i < input->candidate_count; ++i) {
       int h = std::max({labelSize[i].cy, textSize[i].cy, commentSize[i].cy});
       int w = labelSize[i].cx + gap + textSize[i].cx;
@@ -418,13 +420,13 @@ extern "C" int wss_render_preview(const WssPreviewInput* input, WssPreviewOutput
           visible((int)i == input->selected ? input->colors[C_HILITED_COMMENT] : input->colors[C_COMMENT]);
       if (commentVisible) w += gap + commentSize[i].cx;
       const int start = width + ((int)i == input->selected ? markGap : 0);
-      rects[i] = {start, height, start + w, height + h};
+      rects[i] = {start, top, start + w, top + h};
       width += w + ((int)i == input->selected ? markGap : 0) +
                (i + 1 < input->candidate_count ? candidateGap : 0);
-      height = std::max(height, rects[i].b);
+      bottom = std::max(bottom, rects[i].b);
     }
     contentWidth = std::max(contentWidth, width + marginX);
-    contentHeight = std::max(contentHeight, height + marginY);
+    contentHeight = std::max(contentHeight, bottom + marginY);
   } else {
     int width = offsetX + marginX;
     int y = offsetY + marginY + (preeditHeight ? preeditHeight + input->spacing : 0);
